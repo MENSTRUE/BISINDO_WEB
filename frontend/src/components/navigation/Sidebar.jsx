@@ -1,13 +1,15 @@
-import { useState } from "react";
-
 import {
+  BrainCircuit,
+  History,
+  Languages,
   LayoutDashboard,
   ScanLine,
-  History,
-  BrainCircuit,
   Settings,
-  Languages,
 } from "lucide-react";
+
+import {
+  NavLink,
+} from "react-router-dom";
 
 import "../../styles/sidebar.css";
 
@@ -15,38 +17,45 @@ const navigationItems = [
   {
     id: "dashboard",
     label: "Dashboard",
+    path: "/dashboard",
     icon: LayoutDashboard,
   },
   {
     id: "recognition",
     label: "Live Recognition",
+    path: "/recognition",
     icon: ScanLine,
   },
   {
     id: "history",
     label: "History",
+    path: "/history",
     icon: History,
   },
   {
     id: "models",
     label: "Models",
+    path: "/models",
     icon: BrainCircuit,
   },
 ];
 
 function Sidebar() {
-  const [activeItem, setActiveItem] = useState("dashboard");
-
   return (
     <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="sidebar-brand-icon">
-          <Languages size={20} strokeWidth={2} />
+          <Languages
+            size={20}
+            strokeWidth={2}
+          />
         </div>
 
         <div className="sidebar-brand-text">
           <strong>BISINDO AI</strong>
-          <span>Recognition System</span>
+          <span>
+            Recognition System
+          </span>
         </div>
       </div>
 
@@ -59,77 +68,91 @@ function Sidebar() {
           className="sidebar-navigation"
           aria-label="Main navigation"
         >
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
+          {navigationItems.map(
+            (item) => {
+              const Icon = item.icon;
 
-            const isActive =
-              activeItem === item.id;
+              return (
+                <NavLink
+                  key={item.id}
+                  to={item.path}
+                  className={({
+                    isActive,
+                  }) =>
+                    `sidebar-nav-item ${
+                      isActive
+                        ? "active"
+                        : ""
+                    }`
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <span className="sidebar-nav-icon">
+                        <Icon
+                          size={18}
+                          strokeWidth={1.8}
+                        />
+                      </span>
 
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className={`sidebar-nav-item ${
-                  isActive ? "active" : ""
-                }`}
-                onClick={() =>
-                  setActiveItem(item.id)
-                }
-              >
-                <span className="sidebar-nav-icon">
-                  <Icon
-                    size={18}
-                    strokeWidth={1.8}
-                  />
-                </span>
+                      <span className="sidebar-nav-label">
+                        {item.label}
+                      </span>
 
-                <span className="sidebar-nav-label">
-                  {item.label}
-                </span>
-
-                {isActive && (
-                  <span className="sidebar-active-indicator" />
-                )}
-              </button>
-            );
-          })}
+                      {isActive && (
+                        <span className="sidebar-active-indicator" />
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              );
+            },
+          )}
         </nav>
       </div>
 
       <div className="sidebar-footer">
-        <button
-          type="button"
-          className={`sidebar-nav-item ${
-            activeItem === "settings"
-              ? "active"
-              : ""
-          }`}
-          onClick={() =>
-            setActiveItem("settings")
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `sidebar-nav-item ${
+              isActive
+                ? "active"
+                : ""
+            }`
           }
         >
-          <span className="sidebar-nav-icon">
-            <Settings
-              size={18}
-              strokeWidth={1.8}
-            />
-          </span>
+          {({ isActive }) => (
+            <>
+              <span className="sidebar-nav-icon">
+                <Settings
+                  size={18}
+                  strokeWidth={1.8}
+                />
+              </span>
 
-          <span className="sidebar-nav-label">
-            Settings
-          </span>
+              <span className="sidebar-nav-label">
+                Settings
+              </span>
 
-          {activeItem === "settings" && (
-            <span className="sidebar-active-indicator" />
+              {isActive && (
+                <span className="sidebar-active-indicator" />
+              )}
+            </>
           )}
-        </button>
+        </NavLink>
 
         <div className="sidebar-version">
           <span className="sidebar-version-dot" />
 
           <div>
-            <strong>System Online</strong>
-            <span>Web v0.1.0</span>
+            <strong>
+              System Online
+            </strong>
+
+            <span>
+              Web v0.1.0
+            </span>
           </div>
         </div>
       </div>

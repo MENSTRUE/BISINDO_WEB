@@ -137,6 +137,7 @@
   cursor: pointer;
 
   text-align: left;
+  text-decoration: none;
 
   transition:
     background 150ms ease,
