@@ -16,50 +16,11 @@
 .app-sidebar {
   min-height: 100vh;
 
-  padding: 24px 18px;
-
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 
   background: #0d1016;
-}
 
-.sidebar-placeholder {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-mark {
-  width: 42px;
-  height: 42px;
-
-  display: grid;
-  place-items: center;
-
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-
-  background: rgba(255, 255, 255, 0.06);
-
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.sidebar-placeholder div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.sidebar-placeholder strong {
-  font-size: 14px;
-  letter-spacing: 0.02em;
-}
-
-.sidebar-placeholder small {
-  color: #7f8898;
-  font-size: 11px;
+  overflow: hidden;
 }
 
 /* =========================
@@ -68,9 +29,12 @@
 
 .app-workspace {
   min-width: 0;
+  min-height: 100vh;
 
   display: flex;
   flex-direction: column;
+
+  background: #090b0f;
 }
 
 /* =========================
@@ -101,6 +65,7 @@
 
   font-size: 11px;
   font-weight: 600;
+
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -108,9 +73,15 @@
 .app-header h1 {
   margin: 0;
 
+  color: #f5f7fa;
+
   font-size: 18px;
   font-weight: 650;
 }
+
+/* =========================
+   SYSTEM STATUS
+========================= */
 
 .system-indicator {
   display: flex;
@@ -126,6 +97,8 @@
   width: 8px;
   height: 8px;
 
+  flex-shrink: 0;
+
   border-radius: 50%;
 
   background: #50c878;
@@ -138,12 +111,18 @@
 ========================= */
 
 .app-content {
+  min-width: 0;
+
   flex: 1;
 
   padding: 28px;
 
   overflow: auto;
 }
+
+/* =========================
+   TEMPORARY PAGE PLACEHOLDER
+========================= */
 
 .page-placeholder {
   min-height: calc(100vh - 138px);
@@ -163,12 +142,15 @@
 
   font-size: 11px;
   font-weight: 700;
+
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
 .page-placeholder h2 {
   margin: 0 0 10px;
+
+  color: #f5f7fa;
 
   font-size: clamp(24px, 3vw, 38px);
   font-weight: 650;
@@ -186,7 +168,7 @@
 }
 
 /* =========================
-   RESPONSIVE BASE
+   TABLET
 ========================= */
 
 @media (max-width: 900px) {
@@ -194,15 +176,18 @@
     grid-template-columns: 88px minmax(0, 1fr);
   }
 
-  .sidebar-placeholder div {
-    display: none;
+  .app-header {
+    padding: 18px 22px;
   }
 
-  .app-sidebar {
-    display: flex;
-    justify-content: center;
+  .app-content {
+    padding: 22px;
   }
 }
+
+/* =========================
+   MOBILE
+========================= */
 
 @media (max-width: 640px) {
   .app-layout {
@@ -213,8 +198,22 @@
     display: none;
   }
 
+  .app-workspace {
+    min-height: 100vh;
+  }
+
   .app-header {
+    min-height: 72px;
+
     padding: 16px 18px;
+  }
+
+  .header-eyebrow {
+    font-size: 9px;
+  }
+
+  .app-header h1 {
+    font-size: 16px;
   }
 
   .app-content {
@@ -223,5 +222,9 @@
 
   .system-indicator {
     display: none;
+  }
+
+  .page-placeholder {
+    min-height: calc(100vh - 108px);
   }
 }
