@@ -1,12 +1,19 @@
+import AppLayout from "./layouts/AppLayout";
+import "./styles/layout.css";
+
 function App() {
   return (
-    <main className="app">
-      <h1>BISINDO AI</h1>
+    <AppLayout>
+      <section className="page-placeholder">
+        <p className="page-label">BISINDO AI</p>
 
-      <p>
-        Web recognition system is running.
-      </p>
-    </main>
+        <h2>Application workspace</h2>
+
+        <p>
+          The main interface will be built feature by feature.
+        </p>
+      </section>
+    </AppLayout>
   );
 }
 
