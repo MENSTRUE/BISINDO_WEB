@@ -1,0 +1,7 @@
+APP_NAME = "BISINDO AI Backend"
+APP_VERSION = "0.1.0"
+
+API_PREFIX = "/api"
+
+HOST = "127.0.0.1"
+PORT = 8000
