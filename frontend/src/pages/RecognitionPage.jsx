@@ -14,7 +14,16 @@ import {
 
 import useCamera from "../hooks/useCamera";
 
+import LandmarkCanvas from "../components/landmarks/LandmarkCanvas";
+
 import "../styles/recognition.css";
+
+const EMPTY_LANDMARKS = {
+  leftHand: [],
+  rightHand: [],
+  pose: [],
+  face: [],
+};
 
 function RecognitionPage() {
   const {
@@ -25,6 +34,14 @@ function RecognitionPage() {
     startCamera,
     stopCamera,
   } = useCamera();
+
+  /*
+   * Nanti object ini akan diisi hasil
+   * landmark dari backend/WebSocket.
+   *
+   * Untuk sekarang sengaja kosong.
+   */
+  const landmarks = EMPTY_LANDMARKS;
 
   const getCameraStatusText = () => {
     if (cameraStatus === "requesting") {
@@ -41,6 +58,16 @@ function RecognitionPage() {
 
     return "Camera Off";
   };
+
+  const totalHandLandmarks =
+    landmarks.leftHand.length +
+    landmarks.rightHand.length;
+
+  const totalPoseLandmarks =
+    landmarks.pose.length;
+
+  const totalFaceLandmarks =
+    landmarks.face.length;
 
   return (
     <div className="recognition-page">
@@ -108,9 +135,11 @@ function RecognitionPage() {
             </div>
           </div>
 
-          <div className="camera-preview">
-            {/* VIDEO CAMERA */}
+          {/* =========================
+              CAMERA PREVIEW
+          ========================== */}
 
+          <div className="camera-preview">
             <video
               ref={videoRef}
               className={`camera-video ${
@@ -123,7 +152,16 @@ function RecognitionPage() {
               muted
             />
 
-            {/* SCAN CORNERS */}
+            {/* LANDMARK CANVAS */}
+
+            {isCameraActive && (
+              <LandmarkCanvas
+                landmarks={landmarks}
+                mirrored
+              />
+            )}
+
+            {/* CAMERA CORNERS */}
 
             <div className="camera-corner top-left" />
 
@@ -133,7 +171,7 @@ function RecognitionPage() {
 
             <div className="camera-corner bottom-right" />
 
-            {/* PLACEHOLDER */}
+            {/* CAMERA PLACEHOLDER */}
 
             {!isCameraActive && (
               <div className="camera-placeholder">
@@ -181,7 +219,7 @@ function RecognitionPage() {
               </div>
             )}
 
-            {/* OVERLAY BADGE */}
+            {/* OVERLAY LABEL */}
 
             <div className="camera-overlay-badge">
               <ScanLine
@@ -192,13 +230,43 @@ function RecognitionPage() {
               Landmark Overlay
             </div>
 
-            {/* LIVE BADGE */}
+            {/* LIVE STATUS */}
 
             {isCameraActive && (
               <div className="camera-live-badge">
                 <span />
 
                 LIVE
+              </div>
+            )}
+
+            {/* LANDMARK STATUS */}
+
+            {isCameraActive && (
+              <div className="landmark-debug-status">
+                <div>
+                  <span className="landmark-dot hand" />
+                  Hand
+                  <strong>
+                    {totalHandLandmarks}
+                  </strong>
+                </div>
+
+                <div>
+                  <span className="landmark-dot pose" />
+                  Body
+                  <strong>
+                    {totalPoseLandmarks}
+                  </strong>
+                </div>
+
+                <div>
+                  <span className="landmark-dot face" />
+                  Face
+                  <strong>
+                    {totalFaceLandmarks}
+                  </strong>
+                </div>
               </div>
             )}
           </div>
@@ -397,9 +465,9 @@ function RecognitionPage() {
             />
 
             <p>
-              Kamera browser sudah dapat
-              digunakan. Backend inference
-              belum terhubung.
+              Layer landmark sudah siap.
+              Data landmark asli akan berasal
+              dari backend inference.
             </p>
           </div>
         </aside>
