@@ -190,9 +190,12 @@
 .camera-preview {
   position: relative;
 
-  min-height: 440px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
 
-  flex: 1;
+  min-height: 0;
+
+  flex: none;
 
   overflow: hidden;
 
@@ -775,8 +778,9 @@
   .recognition-control {
     justify-content: center;
   }
+}
 
-  /* =========================
+/* =========================
    LIVE CAMERA
 ========================= */
 
@@ -788,17 +792,19 @@
   height: 100%;
 
   object-fit: cover;
+  object-position: center center;
 
   opacity: 0;
 
-  transition: opacity 200ms ease;
-
   /*
-   * Mirror hanya untuk tampilan pengguna.
-   * Data inference nanti tetap diproses
-   * dari frame aslinya.
+   * Preview seperti cermin.
+   * HANYA tampilan yang dibalik.
+   * Frame AI nanti tetap original.
    */
   transform: scaleX(-1);
+  transform-origin: center;
+
+  transition: opacity 200ms ease;
 }
 
 .camera-video.visible {
@@ -867,5 +873,4 @@
 
   box-shadow:
     0 0 8px rgba(217, 107, 107, 0.4);
-}
 }
