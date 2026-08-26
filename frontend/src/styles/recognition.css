@@ -775,4 +775,97 @@
   .recognition-control {
     justify-content: center;
   }
+
+  /* =========================
+   LIVE CAMERA
+========================= */
+
+.camera-video {
+  position: absolute;
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+
+  opacity: 0;
+
+  transition: opacity 200ms ease;
+
+  /*
+   * Mirror hanya untuk tampilan pengguna.
+   * Data inference nanti tetap diproses
+   * dari frame aslinya.
+   */
+  transform: scaleX(-1);
+}
+
+.camera-video.visible {
+  opacity: 1;
+}
+
+/* =========================
+   LIVE BADGE
+========================= */
+
+.camera-live-badge {
+  position: absolute;
+
+  top: 14px;
+  right: 14px;
+
+  z-index: 5;
+
+  padding: 6px 9px;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  border:
+    1px solid rgba(80, 200, 120, 0.16);
+
+  border-radius: 20px;
+
+  background:
+    rgba(8, 11, 16, 0.78);
+
+  color: #83d9a2;
+
+  font-size: 8px;
+  font-weight: 750;
+
+  letter-spacing: 0.1em;
+}
+
+.camera-live-badge span {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+
+  background: #50c878;
+
+  box-shadow:
+    0 0 8px rgba(80, 200, 120, 0.65);
+}
+
+/* =========================
+   CAMERA STATUS
+========================= */
+
+.camera-status-dot.online {
+  background: #50c878;
+
+  box-shadow:
+    0 0 8px rgba(80, 200, 120, 0.55);
+}
+
+.camera-status-dot.error {
+  background: #d96b6b;
+
+  box-shadow:
+    0 0 8px rgba(217, 107, 107, 0.4);
+}
 }

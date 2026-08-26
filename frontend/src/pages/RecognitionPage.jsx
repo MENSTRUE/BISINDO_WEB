@@ -12,9 +12,36 @@ import {
   WifiOff,
 } from "lucide-react";
 
+import useCamera from "../hooks/useCamera";
+
 import "../styles/recognition.css";
 
 function RecognitionPage() {
+  const {
+    videoRef,
+    isCameraActive,
+    cameraStatus,
+    cameraError,
+    startCamera,
+    stopCamera,
+  } = useCamera();
+
+  const getCameraStatusText = () => {
+    if (cameraStatus === "requesting") {
+      return "Meminta Izin";
+    }
+
+    if (cameraStatus === "active") {
+      return "Camera On";
+    }
+
+    if (cameraStatus === "error") {
+      return "Camera Error";
+    }
+
+    return "Camera Off";
+  };
+
   return (
     <div className="recognition-page">
       {/* =========================
@@ -27,11 +54,14 @@ function RecognitionPage() {
             Live Recognition
           </span>
 
-          <h2>Pengenalan BISINDO Real-Time</h2>
+          <h2>
+            Pengenalan BISINDO Real-Time
+          </h2>
 
           <p>
-            Gunakan kamera untuk mengenali gerakan
-            Bahasa Isyarat Indonesia secara real-time.
+            Gunakan kamera untuk mengenali
+            gerakan Bahasa Isyarat Indonesia
+            secara real-time.
           </p>
         </div>
 
@@ -47,7 +77,9 @@ function RecognitionPage() {
       ========================== */}
 
       <section className="recognition-workspace">
-        {/* CAMERA AREA */}
+        {/* =========================
+            CAMERA PANEL
+        ========================== */}
 
         <div className="camera-panel">
           <div className="camera-panel-header">
@@ -56,36 +88,100 @@ function RecognitionPage() {
                 Camera Workspace
               </span>
 
-              <strong>Live Camera</strong>
+              <strong>
+                Live Camera
+              </strong>
             </div>
 
             <div className="camera-status">
-              <span className="camera-status-dot offline" />
-              Camera Off
+              <span
+                className={`camera-status-dot ${
+                  isCameraActive
+                    ? "online"
+                    : cameraStatus === "error"
+                      ? "error"
+                      : "offline"
+                }`}
+              />
+
+              {getCameraStatusText()}
             </div>
           </div>
 
           <div className="camera-preview">
+            {/* VIDEO CAMERA */}
+
+            <video
+              ref={videoRef}
+              className={`camera-video ${
+                isCameraActive
+                  ? "visible"
+                  : ""
+              }`}
+              autoPlay
+              playsInline
+              muted
+            />
+
+            {/* SCAN CORNERS */}
+
             <div className="camera-corner top-left" />
+
             <div className="camera-corner top-right" />
+
             <div className="camera-corner bottom-left" />
+
             <div className="camera-corner bottom-right" />
 
-            <div className="camera-placeholder">
-              <div className="camera-placeholder-icon">
-                <Camera
-                  size={34}
-                  strokeWidth={1.4}
-                />
+            {/* PLACEHOLDER */}
+
+            {!isCameraActive && (
+              <div className="camera-placeholder">
+                <div className="camera-placeholder-icon">
+                  <Camera
+                    size={34}
+                    strokeWidth={1.4}
+                  />
+                </div>
+
+                {cameraStatus ===
+                "requesting" ? (
+                  <>
+                    <strong>
+                      Meminta izin kamera...
+                    </strong>
+
+                    <p>
+                      Silakan izinkan akses
+                      kamera melalui browser.
+                    </p>
+                  </>
+                ) : cameraError ? (
+                  <>
+                    <strong>
+                      Kamera tidak tersedia
+                    </strong>
+
+                    <p>
+                      {cameraError}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <strong>
+                      Kamera belum aktif
+                    </strong>
+
+                    <p>
+                      Tekan tombol Mulai Kamera
+                      untuk mengaktifkan webcam.
+                    </p>
+                  </>
+                )}
               </div>
+            )}
 
-              <strong>Kamera belum aktif</strong>
-
-              <p>
-                Preview kamera akan ditampilkan
-                di area ini.
-              </p>
-            </div>
+            {/* OVERLAY BADGE */}
 
             <div className="camera-overlay-badge">
               <ScanLine
@@ -95,25 +191,49 @@ function RecognitionPage() {
 
               Landmark Overlay
             </div>
+
+            {/* LIVE BADGE */}
+
+            {isCameraActive && (
+              <div className="camera-live-badge">
+                <span />
+
+                LIVE
+              </div>
+            )}
           </div>
+
+          {/* =========================
+              CAMERA CONTROLS
+          ========================== */}
 
           <div className="camera-controls">
             <button
               type="button"
               className="recognition-control primary"
+              onClick={startCamera}
+              disabled={
+                isCameraActive ||
+                cameraStatus ===
+                  "requesting"
+              }
             >
               <Play
                 size={16}
                 strokeWidth={1.9}
               />
 
-              Mulai Kamera
+              {cameraStatus ===
+              "requesting"
+                ? "Meminta Izin..."
+                : "Mulai Kamera"}
             </button>
 
             <button
               type="button"
               className="recognition-control secondary"
-              disabled
+              onClick={stopCamera}
+              disabled={!isCameraActive}
             >
               <Square
                 size={15}
@@ -124,12 +244,16 @@ function RecognitionPage() {
             </button>
 
             <div className="camera-control-info">
-              Kamera belum dihubungkan.
+              {isCameraActive
+                ? "Kamera aktif."
+                : "Kamera belum aktif."}
             </div>
           </div>
         </div>
 
-        {/* RESULT PANEL */}
+        {/* =========================
+            RESULT PANEL
+        ========================== */}
 
         <aside className="recognition-result-panel">
           <div className="result-panel-header">
@@ -138,7 +262,9 @@ function RecognitionPage() {
                 AI Prediction
               </span>
 
-              <strong>Hasil Pengenalan</strong>
+              <strong>
+                Hasil Pengenalan
+              </strong>
             </div>
 
             <Activity
@@ -160,13 +286,21 @@ function RecognitionPage() {
             </span>
 
             <strong className="prediction-value">
-              Menunggu Kamera
+              {isCameraActive
+                ? "Menunggu AI"
+                : "Menunggu Kamera"}
             </strong>
 
             <span className="prediction-subtitle">
-              Belum ada gerakan yang diproses.
+              {isCameraActive
+                ? "Kamera aktif, inference belum terhubung."
+                : "Belum ada gerakan yang diproses."}
             </span>
           </div>
+
+          {/* =========================
+              METRICS
+          ========================== */}
 
           <div className="prediction-metrics">
             <div className="prediction-metric">
@@ -178,8 +312,13 @@ function RecognitionPage() {
               </div>
 
               <div>
-                <span>Confidence</span>
-                <strong>--</strong>
+                <span>
+                  Confidence
+                </span>
+
+                <strong>
+                  --
+                </strong>
               </div>
             </div>
 
@@ -192,8 +331,13 @@ function RecognitionPage() {
               </div>
 
               <div>
-                <span>Sequence</span>
-                <strong>0 / 48</strong>
+                <span>
+                  Sequence
+                </span>
+
+                <strong>
+                  0 / 48
+                </strong>
               </div>
             </div>
 
@@ -206,11 +350,20 @@ function RecognitionPage() {
               </div>
 
               <div>
-                <span>Backend</span>
-                <strong>Offline</strong>
+                <span>
+                  Backend
+                </span>
+
+                <strong>
+                  Offline
+                </strong>
               </div>
             </div>
           </div>
+
+          {/* =========================
+              MODEL INFO
+          ========================== */}
 
           <div className="model-info-card">
             <div className="model-info-header">
@@ -219,15 +372,23 @@ function RecognitionPage() {
                 strokeWidth={1.7}
               />
 
-              <span>Model Aktif</span>
+              <span>
+                Model Aktif
+              </span>
             </div>
 
-            <strong>v1 · Words</strong>
+            <strong>
+              v1 · Words
+            </strong>
 
             <p>
               Model pengenalan kata BISINDO.
             </p>
           </div>
+
+          {/* =========================
+              WARNING
+          ========================== */}
 
           <div className="recognition-warning">
             <CircleAlert
@@ -236,9 +397,9 @@ function RecognitionPage() {
             />
 
             <p>
-              Backend inference belum terhubung.
-              Tampilan ini masih berupa workspace
-              frontend.
+              Kamera browser sudah dapat
+              digunakan. Backend inference
+              belum terhubung.
             </p>
           </div>
         </aside>
@@ -255,7 +416,9 @@ function RecognitionPage() {
               Transcript
             </span>
 
-            <strong>Hasil Kalimat</strong>
+            <strong>
+              Hasil Kalimat
+            </strong>
           </div>
 
           <div className="transcript-status">
@@ -275,8 +438,8 @@ function RecognitionPage() {
           />
 
           <p>
-            Hasil pengenalan akan disusun dan
-            ditampilkan di sini.
+            Hasil pengenalan akan disusun
+            dan ditampilkan di sini.
           </p>
         </div>
       </section>
