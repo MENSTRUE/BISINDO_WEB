@@ -1,4 +1,5 @@
 import Sidebar from "../components/navigation/Sidebar";
+import Header from "../components/navigation/Header";
 
 function AppLayout({ children }) {
   return (
@@ -8,21 +9,7 @@ function AppLayout({ children }) {
       </div>
 
       <div className="app-workspace">
-        <header className="app-header">
-          <div>
-            <span className="header-eyebrow">
-              Workspace
-            </span>
-
-            <h1>BISINDO Recognition</h1>
-          </div>
-
-          <div className="system-indicator">
-            <span className="indicator-dot" />
-
-            System Ready
-          </div>
-        </header>
+        <Header />
 
         <main className="app-content">
           {children}

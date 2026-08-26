@@ -10,13 +10,14 @@
 }
 
 /* =========================
-   SIDEBAR SHELL
+   SIDEBAR
 ========================= */
 
 .app-sidebar {
   min-height: 100vh;
 
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right:
+    1px solid rgba(255, 255, 255, 0.08);
 
   background: #0d1016;
 
@@ -38,75 +39,6 @@
 }
 
 /* =========================
-   HEADER SHELL
-========================= */
-
-.app-header {
-  min-height: 82px;
-
-  padding: 18px 28px;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-
-  background: rgba(13, 16, 22, 0.92);
-}
-
-.header-eyebrow {
-  display: block;
-
-  margin-bottom: 4px;
-
-  color: #7f8898;
-
-  font-size: 11px;
-  font-weight: 600;
-
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.app-header h1 {
-  margin: 0;
-
-  color: #f5f7fa;
-
-  font-size: 18px;
-  font-weight: 650;
-}
-
-/* =========================
-   SYSTEM STATUS
-========================= */
-
-.system-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  color: #aab2c0;
-
-  font-size: 12px;
-}
-
-.indicator-dot {
-  width: 8px;
-  height: 8px;
-
-  flex-shrink: 0;
-
-  border-radius: 50%;
-
-  background: #50c878;
-
-  box-shadow: 0 0 10px rgba(80, 200, 120, 0.45);
-}
-
-/* =========================
    MAIN CONTENT
 ========================= */
 
@@ -121,11 +53,12 @@
 }
 
 /* =========================
-   TEMPORARY PAGE PLACEHOLDER
+   TEMPORARY PLACEHOLDER
 ========================= */
 
 .page-placeholder {
-  min-height: calc(100vh - 138px);
+  min-height:
+    calc(100vh - 138px);
 
   display: flex;
   flex-direction: column;
@@ -152,7 +85,9 @@
 
   color: #f5f7fa;
 
-  font-size: clamp(24px, 3vw, 38px);
+  font-size:
+    clamp(24px, 3vw, 38px);
+
   font-weight: 650;
 }
 
@@ -173,11 +108,8 @@
 
 @media (max-width: 900px) {
   .app-layout {
-    grid-template-columns: 88px minmax(0, 1fr);
-  }
-
-  .app-header {
-    padding: 18px 22px;
+    grid-template-columns:
+      88px minmax(0, 1fr);
   }
 
   .app-content {
@@ -202,29 +134,12 @@
     min-height: 100vh;
   }
 
-  .app-header {
-    min-height: 72px;
-
-    padding: 16px 18px;
-  }
-
-  .header-eyebrow {
-    font-size: 9px;
-  }
-
-  .app-header h1 {
-    font-size: 16px;
-  }
-
   .app-content {
     padding: 18px;
   }
 
-  .system-indicator {
-    display: none;
-  }
-
   .page-placeholder {
-    min-height: calc(100vh - 108px);
+    min-height:
+      calc(100vh - 108px);
   }
 }

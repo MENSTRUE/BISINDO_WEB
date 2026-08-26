@@ -1,0 +1,211 @@
+.main-header {
+  min-height: 82px;
+
+  padding: 14px 28px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+
+  border-bottom:
+    1px solid rgba(255, 255, 255, 0.08);
+
+  background:
+    rgba(13, 16, 22, 0.94);
+
+  backdrop-filter: blur(16px);
+}
+
+/* =========================
+   TITLE
+========================= */
+
+.header-title-group {
+  min-width: 0;
+}
+
+.header-eyebrow {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #697386;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.header-title-group h1 {
+  margin: 0;
+
+  color: #f5f7fa;
+
+  font-size: 17px;
+  font-weight: 650;
+
+  white-space: nowrap;
+}
+
+/* =========================
+   CONTROLS
+========================= */
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.header-control-card {
+  min-height: 48px;
+
+  padding: 7px 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  border:
+    1px solid rgba(255, 255, 255, 0.07);
+
+  border-radius: 10px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+.header-control-card:hover {
+  background:
+    rgba(255, 255, 255, 0.04);
+
+  border-color:
+    rgba(255, 255, 255, 0.1);
+}
+
+.header-control-icon {
+  width: 30px;
+  height: 30px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 8px;
+
+  background:
+    rgba(255, 255, 255, 0.045);
+
+  color: #8e98a8;
+}
+
+.header-control-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.header-control-label {
+  color: #596273;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.header-control-content strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  color: #b9c1cc;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+/* =========================
+   CONNECTION
+========================= */
+
+.connection-dot {
+  width: 6px;
+  height: 6px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: #50c878;
+
+  box-shadow:
+    0 0 8px rgba(80, 200, 120, 0.55);
+}
+
+/* =========================
+   TABLET
+========================= */
+
+@media (max-width: 900px) {
+  .main-header {
+    padding: 14px 22px;
+  }
+
+  .header-control-card {
+    padding: 7px 9px;
+  }
+
+  .header-control-content {
+    display: none;
+  }
+
+  .header-control-icon {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 640px) {
+  .main-header {
+    min-height: 72px;
+
+    padding: 13px 18px;
+  }
+
+  .header-title-group h1 {
+    font-size: 15px;
+  }
+
+  .header-eyebrow {
+    font-size: 8px;
+  }
+
+  .header-controls {
+    gap: 6px;
+  }
+
+  .header-control-card {
+    min-height: auto;
+
+    padding: 5px;
+
+    border-radius: 8px;
+  }
+
+  .header-control-icon {
+    width: 30px;
+    height: 30px;
+  }
+}
