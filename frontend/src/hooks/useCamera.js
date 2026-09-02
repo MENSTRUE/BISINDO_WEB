@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 function useCamera() {
   const videoRef = useRef(null);
@@ -12,6 +16,13 @@ function useCamera() {
 
   const [cameraError, setCameraError] =
     useState("");
+
+  const [activeCameraName, setActiveCameraName] =
+    useState("");
+
+  /* =========================
+     STOP CAMERA
+  ========================= */
 
   const stopCamera = () => {
     if (streamRef.current) {
@@ -30,7 +41,12 @@ function useCamera() {
 
     setIsCameraActive(false);
     setCameraStatus("idle");
+    setActiveCameraName("");
   };
+
+  /* =========================
+     START CAMERA
+  ========================= */
 
   const startCamera = async () => {
     if (
@@ -50,27 +66,127 @@ function useCamera() {
       setCameraError("");
       setCameraStatus("requesting");
 
+      /*
+       * Pastikan stream lama benar-benar
+       * dihentikan sebelum meminta kamera baru.
+       */
+      if (streamRef.current) {
+        streamRef.current
+          .getTracks()
+          .forEach((track) => {
+            track.stop();
+          });
+
+        streamRef.current = null;
+      }
+
+      /* =========================
+         DETECT AVAILABLE CAMERAS
+      ========================= */
+
+      const devices =
+        await navigator.mediaDevices
+          .enumerateDevices();
+
+      const cameras = devices.filter(
+        (device) =>
+          device.kind === "videoinput",
+      );
+
+      console.log(
+        "Available cameras:",
+        cameras,
+      );
+
+      if (cameras.length === 0) {
+        throw new DOMException(
+          "Tidak ada kamera ditemukan.",
+          "NotFoundError",
+        );
+      }
+
+      /*
+       * Hindari virtual camera jika ada.
+       */
+      const physicalCamera =
+        cameras.find((camera) => {
+          const label =
+            camera.label
+              .toLowerCase()
+              .trim();
+
+          return (
+            !label.includes("obs") &&
+            !label.includes("virtual") &&
+            !label.includes("droidcam") &&
+            !label.includes("snap camera")
+          );
+        }) ?? cameras[0];
+
+      console.log(
+        "Selected camera:",
+        physicalCamera,
+      );
+
+      /* =========================
+         OPEN SELECTED CAMERA
+      ========================= */
+
       const stream =
-        await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
+        await navigator.mediaDevices
+          .getUserMedia({
+            video: {
+              deviceId: {
+                exact:
+                  physicalCamera.deviceId,
+              },
 
-            width: {
-              ideal: 1280,
+              width: {
+                ideal: 1280,
+              },
+
+              height: {
+                ideal: 720,
+              },
             },
 
-            height: {
-              ideal: 720,
-            },
-          },
-
-          audio: false,
-        });
+            audio: false,
+          });
 
       streamRef.current = stream;
 
+      /* =========================
+         GET ACTUAL ACTIVE DEVICE
+      ========================= */
+
+      const videoTrack =
+        stream.getVideoTracks()[0];
+
+      const settings =
+        videoTrack?.getSettings();
+
+      const label =
+        videoTrack?.label ||
+        physicalCamera.label ||
+        "Camera";
+
+      console.log(
+        "Camera started:",
+        {
+          label,
+          settings,
+        },
+      );
+
+      setActiveCameraName(label);
+
+      /* =========================
+         ATTACH TO VIDEO
+      ========================= */
+
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject =
+          stream;
 
         await videoRef.current.play();
       }
@@ -83,10 +199,34 @@ function useCamera() {
         error,
       );
 
+      /*
+       * Pastikan stream gagal tidak tertinggal.
+       */
+      if (streamRef.current) {
+        streamRef.current
+          .getTracks()
+          .forEach((track) => {
+            track.stop();
+          });
+
+        streamRef.current = null;
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+
       setIsCameraActive(false);
       setCameraStatus("error");
+      setActiveCameraName("");
 
-      if (error.name === "NotAllowedError") {
+      /* =========================
+         FRIENDLY ERRORS
+      ========================= */
+
+      if (
+        error.name === "NotAllowedError"
+      ) {
         setCameraError(
           "Izin kamera ditolak. Izinkan kamera melalui pengaturan browser.",
         );
@@ -100,15 +240,35 @@ function useCamera() {
         error.name === "NotReadableError"
       ) {
         setCameraError(
-          "Kamera sedang digunakan aplikasi lain.",
+          "Kamera ditemukan, tetapi tidak dapat dibuka. Pastikan kamera tidak sedang digunakan aplikasi lain.",
+        );
+      } else if (
+        error.name === "OverconstrainedError"
+      ) {
+        setCameraError(
+          "Konfigurasi kamera tidak didukung oleh perangkat.",
+        );
+      } else if (
+        error.name === "AbortError"
+      ) {
+        setCameraError(
+          "Proses membuka kamera dibatalkan oleh perangkat.",
         );
       } else {
         setCameraError(
-          "Kamera tidak dapat diaktifkan.",
+          `Kamera tidak dapat diaktifkan${
+            error?.message
+              ? `: ${error.message}`
+              : "."
+          }`,
         );
       }
     }
   };
+
+  /* =========================
+     CLEANUP
+  ========================= */
 
   useEffect(() => {
     return () => {
@@ -118,15 +278,20 @@ function useCamera() {
           .forEach((track) => {
             track.stop();
           });
+
+        streamRef.current = null;
       }
     };
   }, []);
 
   return {
     videoRef,
+
     isCameraActive,
     cameraStatus,
     cameraError,
+    activeCameraName,
+
     startCamera,
     stopCamera,
   };

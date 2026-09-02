@@ -9,10 +9,12 @@ import {
   Play,
   ScanLine,
   Square,
+  Wifi,
   WifiOff,
 } from "lucide-react";
 
 import useCamera from "../hooks/useCamera";
+import useBackendHealth from "../hooks/useBackendHealth";
 
 import LandmarkCanvas from "../components/landmarks/LandmarkCanvas";
 
@@ -26,6 +28,10 @@ const EMPTY_LANDMARKS = {
 };
 
 function RecognitionPage() {
+  /* =========================
+     CAMERA
+  ========================= */
+
   const {
     videoRef,
     isCameraActive,
@@ -35,13 +41,53 @@ function RecognitionPage() {
     stopCamera,
   } = useCamera();
 
+  /* =========================
+     BACKEND HEALTH
+  ========================= */
+
+  const {
+    status: backendStatus,
+    isOnline: isBackendOnline,
+  } = useBackendHealth();
+
+  const BackendIcon =
+    isBackendOnline
+      ? Wifi
+      : WifiOff;
+
+  const getBackendStatusText = () => {
+    if (backendStatus === "checking") {
+      return "Checking";
+    }
+
+    return isBackendOnline
+      ? "Online"
+      : "Offline";
+  };
+
+  /* =========================
+     LANDMARK DATA
+  ========================= */
+
   /*
-   * Nanti object ini akan diisi hasil
-   * landmark dari backend/WebSocket.
-   *
-   * Untuk sekarang sengaja kosong.
+   * Nanti object ini akan diganti
+   * dengan data asli dari WebSocket.
    */
   const landmarks = EMPTY_LANDMARKS;
+
+  const totalHandLandmarks =
+    landmarks.leftHand.length +
+    landmarks.rightHand.length;
+
+  const totalPoseLandmarks =
+    landmarks.pose.length;
+
+  const totalFaceLandmarks =
+    landmarks.face.length;
+
+  /* =========================
+     CAMERA STATUS
+  ========================= */
 
   const getCameraStatusText = () => {
     if (cameraStatus === "requesting") {
@@ -58,16 +104,6 @@ function RecognitionPage() {
 
     return "Camera Off";
   };
-
-  const totalHandLandmarks =
-    landmarks.leftHand.length +
-    landmarks.rightHand.length;
-
-  const totalPoseLandmarks =
-    landmarks.pose.length;
-
-  const totalFaceLandmarks =
-    landmarks.face.length;
 
   return (
     <div className="recognition-page">
@@ -182,8 +218,7 @@ function RecognitionPage() {
                   />
                 </div>
 
-                {cameraStatus ===
-                "requesting" ? (
+                {cameraStatus === "requesting" ? (
                   <>
                     <strong>
                       Meminta izin kamera...
@@ -246,7 +281,9 @@ function RecognitionPage() {
               <div className="landmark-debug-status">
                 <div>
                   <span className="landmark-dot hand" />
+
                   Hand
+
                   <strong>
                     {totalHandLandmarks}
                   </strong>
@@ -254,7 +291,9 @@ function RecognitionPage() {
 
                 <div>
                   <span className="landmark-dot pose" />
+
                   Body
+
                   <strong>
                     {totalPoseLandmarks}
                   </strong>
@@ -262,7 +301,9 @@ function RecognitionPage() {
 
                 <div>
                   <span className="landmark-dot face" />
+
                   Face
+
                   <strong>
                     {totalFaceLandmarks}
                   </strong>
@@ -282,8 +323,7 @@ function RecognitionPage() {
               onClick={startCamera}
               disabled={
                 isCameraActive ||
-                cameraStatus ===
-                  "requesting"
+                cameraStatus === "requesting"
               }
             >
               <Play
@@ -291,8 +331,7 @@ function RecognitionPage() {
                 strokeWidth={1.9}
               />
 
-              {cameraStatus ===
-              "requesting"
+              {cameraStatus === "requesting"
                 ? "Meminta Izin..."
                 : "Mulai Kamera"}
             </button>
@@ -341,6 +380,10 @@ function RecognitionPage() {
             />
           </div>
 
+          {/* =========================
+              CURRENT PREDICTION
+          ========================== */}
+
           <div className="prediction-card">
             <div className="prediction-icon">
               <Hand
@@ -361,7 +404,9 @@ function RecognitionPage() {
 
             <span className="prediction-subtitle">
               {isCameraActive
-                ? "Kamera aktif, inference belum terhubung."
+                ? isBackendOnline
+                  ? "Kamera dan backend aktif. Inference belum dimulai."
+                  : "Kamera aktif, tetapi backend belum terhubung."
                 : "Belum ada gerakan yang diproses."}
             </span>
           </div>
@@ -371,6 +416,8 @@ function RecognitionPage() {
           ========================== */}
 
           <div className="prediction-metrics">
+            {/* CONFIDENCE */}
+
             <div className="prediction-metric">
               <div className="metric-icon">
                 <Gauge
@@ -389,6 +436,8 @@ function RecognitionPage() {
                 </strong>
               </div>
             </div>
+
+            {/* SEQUENCE */}
 
             <div className="prediction-metric">
               <div className="metric-icon">
@@ -409,9 +458,13 @@ function RecognitionPage() {
               </div>
             </div>
 
+            {/* BACKEND */}
+
             <div className="prediction-metric">
-              <div className="metric-icon">
-                <WifiOff
+              <div
+                className={`metric-icon backend-${backendStatus}`}
+              >
+                <BackendIcon
                   size={16}
                   strokeWidth={1.7}
                 />
@@ -423,7 +476,7 @@ function RecognitionPage() {
                 </span>
 
                 <strong>
-                  Offline
+                  {getBackendStatusText()}
                 </strong>
               </div>
             </div>
@@ -455,19 +508,27 @@ function RecognitionPage() {
           </div>
 
           {/* =========================
-              WARNING
+              BACKEND INFO
           ========================== */}
 
-          <div className="recognition-warning">
+          <div
+            className={`recognition-warning ${
+              isBackendOnline
+                ? "backend-connected"
+                : ""
+            }`}
+          >
             <CircleAlert
               size={16}
               strokeWidth={1.7}
             />
 
             <p>
-              Layer landmark sudah siap.
-              Data landmark asli akan berasal
-              dari backend inference.
+              {backendStatus === "checking"
+                ? "Sedang memeriksa koneksi backend FastAPI..."
+                : isBackendOnline
+                  ? "Backend FastAPI terhubung. Inference real-time belum diaktifkan."
+                  : "Backend tidak terhubung. Jalankan server FastAPI terlebih dahulu."}
             </p>
           </div>
         </aside>

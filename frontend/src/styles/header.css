@@ -209,3 +209,55 @@
     height: 30px;
   }
 }
+
+/* =========================
+   BACKEND CONNECTION
+========================= */
+
+.connection-dot.online {
+  background: #50c878;
+
+  box-shadow:
+    0 0 8px rgba(80, 200, 120, 0.55);
+}
+
+.connection-dot.offline {
+  background: #d96b6b;
+
+  box-shadow:
+    0 0 8px rgba(217, 107, 107, 0.4);
+}
+
+.connection-dot.checking {
+  background: #d7a84c;
+
+  box-shadow:
+    0 0 8px rgba(215, 168, 76, 0.4);
+}
+
+.connection.online
+.header-control-icon {
+  color: #70ce91;
+}
+
+.connection.offline
+.header-control-icon {
+  color: #c66c6c;
+}
+
+.connection.checking
+.header-control-icon {
+  color: #cba052;
+}
+
+.connection-loading {
+  animation:
+    backend-spin 900ms
+    linear infinite;
+}
+
+@keyframes backend-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

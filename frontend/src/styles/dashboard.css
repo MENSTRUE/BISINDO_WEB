@@ -792,3 +792,14 @@
     flex-wrap: wrap;
   }
 }
+
+/* =========================
+   BACKEND ERROR STATUS
+========================= */
+
+.dashboard-stat-status.error {
+  background: #d96b6b;
+
+  box-shadow:
+    0 0 7px rgba(217, 107, 107, 0.4);
+}

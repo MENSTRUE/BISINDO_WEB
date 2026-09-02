@@ -11,44 +11,81 @@ import {
 
 import { Link } from "react-router-dom";
 
+import useBackendHealth from "../hooks/useBackendHealth";
+
 import "../styles/dashboard.css";
 
-const systemStats = [
-  {
-    id: "model",
-    label: "Model Aktif",
-    value: "v1 · Words",
-    description: "Pengenalan kata BISINDO",
-    icon: BrainCircuit,
-    status: "ready",
-  },
-  {
-    id: "classes",
-    label: "Kelas Bahasa Isyarat",
-    value: "32",
-    description: "Kosakata model v1",
-    icon: Languages,
-    status: "neutral",
-  },
-  {
-    id: "sequence",
-    label: "Sequence",
-    value: "48 Frame",
-    description: "Jendela input temporal",
-    icon: Activity,
-    status: "neutral",
-  },
-  {
-    id: "backend",
-    label: "Backend",
-    value: "Belum Terhubung",
-    description: "Integrasi dilakukan tahap berikutnya",
-    icon: Server,
-    status: "pending",
-  },
-];
-
 function DashboardPage() {
+  const {
+    status: backendStatus,
+    isOnline: isBackendOnline,
+  } = useBackendHealth();
+
+  const getBackendValue = () => {
+    if (backendStatus === "checking") {
+      return "Memeriksa...";
+    }
+
+    return isBackendOnline
+      ? "Terhubung"
+      : "Tidak Terhubung";
+  };
+
+  const getBackendDescription = () => {
+    if (backendStatus === "checking") {
+      return "Memeriksa FastAPI backend";
+    }
+
+    return isBackendOnline
+      ? "FastAPI backend aktif"
+      : "FastAPI backend tidak aktif";
+  };
+
+  const getBackendStatStatus = () => {
+    if (backendStatus === "checking") {
+      return "pending";
+    }
+
+    return isBackendOnline
+      ? "ready"
+      : "error";
+  };
+
+  const systemStats = [
+    {
+      id: "model",
+      label: "Model Aktif",
+      value: "v1 · Words",
+      description: "Pengenalan kata BISINDO",
+      icon: BrainCircuit,
+      status: "ready",
+    },
+    {
+      id: "classes",
+      label: "Kelas Bahasa Isyarat",
+      value: "32",
+      description: "Kosakata model v1",
+      icon: Languages,
+      status: "neutral",
+    },
+    {
+      id: "sequence",
+      label: "Sequence",
+      value: "48 Frame",
+      description: "Jendela input temporal",
+      icon: Activity,
+      status: "neutral",
+    },
+    {
+      id: "backend",
+      label: "Backend",
+      value: getBackendValue(),
+      description: getBackendDescription(),
+      icon: Server,
+      status: getBackendStatStatus(),
+    },
+  ];
+
   return (
     <div className="dashboard-page">
       {/* =========================
@@ -162,7 +199,12 @@ function DashboardPage() {
 
           <span className="hero-visual-status">
             <span />
-            Frontend Ready
+
+            {isBackendOnline
+              ? "Backend Online"
+              : backendStatus === "checking"
+                ? "Checking Backend"
+                : "Frontend Ready"}
           </span>
         </div>
       </section>
@@ -260,8 +302,8 @@ function DashboardPage() {
 
             <p>
               Riwayat hasil pengenalan akan
-              ditampilkan di sini setelah backend
-              dan kamera terhubung.
+              ditampilkan di sini setelah kamera
+              dan sistem inference digunakan.
             </p>
 
             <Link
