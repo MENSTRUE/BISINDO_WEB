@@ -17,54 +17,90 @@ const RealtimeContext =
   createContext(null);
 
 
-const RECONNECT_DELAY_MS = 2000;
-const PING_INTERVAL_MS = 10000;
+const RECONNECT_DELAY_MS =
+  2000;
+
+
+const PING_INTERVAL_MS =
+  10000;
 
 
 function RealtimeProvider({
   children,
 }) {
+  /* =========================
+     REFS
+  ========================= */
+
   const socketRef =
     useRef(null);
+
 
   const reconnectTimerRef =
     useRef(null);
 
+
   const pingTimerRef =
     useRef(null);
+
 
   const shouldReconnectRef =
     useRef(true);
 
 
-  const [status, setStatus] =
-    useState("connecting");
+  /* =========================
+     STATE
+  ========================= */
 
-  const [lastMessage, setLastMessage] =
-    useState(null);
+  const [
+    status,
+    setStatus,
+  ] = useState(
+    "connecting"
+  );
 
-  const [lastPongAt, setLastPongAt] =
-    useState(null);
 
-  const [error, setError] =
-    useState("");
+  const [
+    lastMessage,
+    setLastMessage,
+  ] = useState(null);
+
+
+  const [
+    lastPongAt,
+    setLastPongAt,
+  ] = useState(null);
+
+
+  const [
+    error,
+    setError,
+  ] = useState("");
 
 
   /* =========================
-     CLEAR TIMERS
+     CLEAR PING
   ========================= */
 
   const clearPingTimer =
     useCallback(() => {
-      if (pingTimerRef.current) {
+      if (
+        pingTimerRef.current
+      ) {
         window.clearInterval(
-          pingTimerRef.current,
+          pingTimerRef.current
         );
 
-        pingTimerRef.current = null;
+
+        pingTimerRef.current =
+          null;
       }
     }, []);
 
+
+  /* =========================
+     CLEAR RECONNECT
+  ========================= */
 
   const clearReconnectTimer =
     useCallback(() => {
@@ -72,8 +108,9 @@ function RealtimeProvider({
         reconnectTimerRef.current
       ) {
         window.clearTimeout(
-          reconnectTimerRef.current,
+          reconnectTimerRef.current
         );
+
 
         reconnectTimerRef.current =
           null;
@@ -82,41 +119,61 @@ function RealtimeProvider({
 
 
   /* =========================
-     SEND
+     SEND MESSAGE
   ========================= */
 
   const sendMessage =
-    useCallback((payload) => {
-      const socket =
-        socketRef.current;
+    useCallback(
+      (
+        payload
+      ) => {
+        const socket =
+          socketRef.current;
 
-      if (
-        !socket ||
-        socket.readyState !==
-          WebSocket.OPEN
-      ) {
-        return false;
-      }
 
-      try {
-        socket.send(
-          JSON.stringify(payload),
-        );
+        if (
+          !socket
 
-        return true;
-      } catch (sendError) {
-        console.error(
-          "WebSocket send error:",
-          sendError,
-        );
+          ||
 
-        return false;
-      }
-    }, []);
+          socket.readyState !==
+            WebSocket.OPEN
+        ) {
+          return false;
+        }
+
+
+        try {
+          socket.send(
+            JSON.stringify(
+              payload
+            )
+          );
+
+
+          return true;
+
+        } catch (
+          sendError
+        ) {
+          console.error(
+            (
+              "WebSocket "
+              + "send error:"
+            ),
+            sendError
+          );
+
+
+          return false;
+        }
+      },
+      []
+    );
 
 
   /* =========================
-     CONNECTION
+     CONNECT
   ========================= */
 
   const connect =
@@ -124,140 +181,245 @@ function RealtimeProvider({
       const existingSocket =
         socketRef.current;
 
+
       if (
-        existingSocket &&
+        existingSocket
+
+        &&
+
         (
-          existingSocket.readyState ===
-            WebSocket.OPEN ||
-          existingSocket.readyState ===
+          existingSocket
+            .readyState ===
+            WebSocket.OPEN
+
+          ||
+
+          existingSocket
+            .readyState ===
             WebSocket.CONNECTING
         )
       ) {
         return;
       }
 
+
       clearReconnectTimer();
 
-      setStatus("connecting");
+
+      setStatus(
+        "connecting"
+      );
+
+
       setError("");
+
+
+      /* =====================
+         CREATE SOCKET
+      ===================== */
 
       const socket =
         createRealtimeSocket();
 
-      socketRef.current = socket;
+
+      socketRef.current =
+        socket;
 
 
-      /* =========================
+      /* =====================
          OPEN
-      ========================= */
+      ===================== */
 
       socket.onopen = () => {
         console.log(
-          "[WebSocket] Connected",
+          "[WebSocket] Connected"
         );
 
-        setStatus("connected");
+
+        setStatus(
+          "connected"
+        );
+
+
         setError("");
+
+
+        /* =================
+           HELLO
+        ================= */
 
         socket.send(
           JSON.stringify({
-            type: "client_hello",
-            client: "bisindo-web",
+            type:
+              "client_hello",
+
+            client:
+              "bisindo-web",
+
             client_time:
-              new Date().toISOString(),
-          }),
+              new Date()
+                .toISOString(),
+          })
         );
+
+
+        /* =================
+           PING
+        ================= */
 
         clearPingTimer();
 
+
         pingTimerRef.current =
-          window.setInterval(() => {
-            if (
-              socket.readyState ===
-              WebSocket.OPEN
-            ) {
-              socket.send(
-                JSON.stringify({
-                  type: "ping",
-                  client_time:
-                    new Date()
-                      .toISOString(),
-                }),
-              );
-            }
-          }, PING_INTERVAL_MS);
+          window.setInterval(
+            () => {
+              if (
+                socket
+                  .readyState ===
+                WebSocket.OPEN
+              ) {
+                socket.send(
+                  JSON.stringify({
+                    type:
+                      "ping",
+
+                    client_time:
+                      new Date()
+                        .toISOString(),
+                  })
+                );
+              }
+            },
+
+            PING_INTERVAL_MS
+          );
       };
 
 
-      /* =========================
+      /* =====================
          MESSAGE
-      ========================= */
+      ===================== */
 
       socket.onmessage = (
-        event,
+        event
       ) => {
         try {
           const data =
-            JSON.parse(event.data);
+            JSON.parse(
+              event.data
+            );
 
-          console.log(
-            "[WebSocket] Message:",
-            data,
-          );
 
-          setLastMessage(data);
-
+          /*
+           * LANDMARK message:
+           *
+           * sangat besar dan datang
+           * berkali-kali per detik.
+           *
+           * Jangan log ke DevTools.
+           */
           if (
-            data.type === "pong"
+            data.type !==
+            "landmarks"
           ) {
-            setLastPongAt(
-              new Date(),
+            console.log(
+              "[WebSocket] Message:",
+              data
             );
           }
-        } catch (parseError) {
+
+
+          /*
+           * Tetap update state.
+           *
+           * useRealtimeLandmarks
+           * tetap menerima prediction
+           * dan landmark seperti biasa.
+           */
+          setLastMessage(
+            data
+          );
+
+
+          /* =================
+             PONG
+          ================= */
+
+          if (
+            data.type ===
+            "pong"
+          ) {
+            setLastPongAt(
+              new Date()
+            );
+          }
+
+        } catch (
+          parseError
+        ) {
           console.error(
-            "WebSocket message parse error:",
-            parseError,
+            (
+              "WebSocket message "
+              + "parse error:"
+            ),
+            parseError
           );
         }
       };
 
 
-      /* =========================
+      /* =====================
          ERROR
-      ========================= */
+      ===================== */
 
       socket.onerror = () => {
-        setStatus("error");
+        setStatus(
+          "error"
+        );
+
 
         setError(
-          "Koneksi WebSocket mengalami error.",
+          (
+            "Koneksi WebSocket "
+            + "mengalami error."
+          )
         );
       };
 
 
-      /* =========================
+      /* =====================
          CLOSE
-      ========================= */
+      ===================== */
 
       socket.onclose = (
-        event,
+        event
       ) => {
         console.log(
           "[WebSocket] Disconnected",
-          event.code,
+          event.code
         );
 
+
         clearPingTimer();
+
 
         if (
           socketRef.current ===
           socket
         ) {
-          socketRef.current = null;
+          socketRef.current =
+            null;
         }
 
-        setStatus("disconnected");
+
+        setStatus(
+          "disconnected"
+        );
+
+
+        /* =================
+           AUTO RECONNECT
+        ================= */
 
         if (
           shouldReconnectRef.current
@@ -267,10 +429,12 @@ function RealtimeProvider({
               () => {
                 connect();
               },
-              RECONNECT_DELAY_MS,
+
+              RECONNECT_DELAY_MS
             );
         }
       };
+
     }, [
       clearPingTimer,
       clearReconnectTimer,
@@ -286,19 +450,32 @@ function RealtimeProvider({
       shouldReconnectRef.current =
         false;
 
+
       clearPingTimer();
+
+
       clearReconnectTimer();
+
 
       const socket =
         socketRef.current;
 
-      if (socket) {
+
+      if (
+        socket
+      ) {
         socket.close();
       }
 
-      socketRef.current = null;
 
-      setStatus("disconnected");
+      socketRef.current =
+        null;
+
+
+      setStatus(
+        "disconnected"
+      );
+
     }, [
       clearPingTimer,
       clearReconnectTimer,
@@ -314,20 +491,30 @@ function RealtimeProvider({
       shouldReconnectRef.current =
         true;
 
+
       clearReconnectTimer();
+
 
       const socket =
         socketRef.current;
 
-      if (socket) {
+
+      if (
+        socket
+      ) {
         socket.close();
-        socketRef.current = null;
+
+
+        socketRef.current =
+          null;
       }
+
 
       window.setTimeout(
         connect,
-        50,
+        50
       );
+
     }, [
       connect,
       clearReconnectTimer,
@@ -342,30 +529,46 @@ function RealtimeProvider({
     shouldReconnectRef.current =
       true;
 
+
     connect();
+
 
     return () => {
       shouldReconnectRef.current =
         false;
 
+
       clearPingTimer();
+
+
       clearReconnectTimer();
+
 
       const socket =
         socketRef.current;
 
-      if (socket) {
+
+      if (
+        socket
+      ) {
         /*
-         * Hindari reconnect ketika
-         * component benar-benar unmount.
+         * Component benar-benar
+         * unmount.
+         *
+         * Jangan auto reconnect.
          */
-        socket.onclose = null;
+        socket.onclose =
+          null;
+
 
         socket.close();
       }
 
-      socketRef.current = null;
+
+      socketRef.current =
+        null;
     };
+
   }, [
     connect,
     clearPingTimer,
@@ -377,35 +580,58 @@ function RealtimeProvider({
      CONTEXT VALUE
   ========================= */
 
-  const value = useMemo(
-    () => ({
-      status,
+  const value =
+    useMemo(
+      () => ({
+        status,
 
-      isConnected:
-        status === "connected",
 
-      isConnecting:
-        status === "connecting",
+        isConnected:
+          (
+            status ===
+            "connected"
+          ),
 
-      lastMessage,
-      lastPongAt,
-      error,
 
-      sendMessage,
-      reconnect,
-      disconnect,
-    }),
-    [
-      status,
-      lastMessage,
-      lastPongAt,
-      error,
-      sendMessage,
-      reconnect,
-      disconnect,
-    ],
-  );
+        isConnecting:
+          (
+            status ===
+            "connecting"
+          ),
 
+
+        lastMessage,
+
+
+        lastPongAt,
+
+
+        error,
+
+
+        sendMessage,
+
+
+        reconnect,
+
+
+        disconnect,
+      }),
+      [
+        status,
+        lastMessage,
+        lastPongAt,
+        error,
+        sendMessage,
+        reconnect,
+        disconnect,
+      ]
+    );
+
+
+  /* =========================
+     PROVIDER
+  ========================= */
 
   return (
     <RealtimeContext.Provider
@@ -417,21 +643,36 @@ function RealtimeProvider({
 }
 
 
+/* =========================
+   HOOK
+========================= */
+
 function useRealtime() {
   const context =
     useContext(
-      RealtimeContext,
+      RealtimeContext
     );
 
-  if (!context) {
+
+  if (
+    !context
+  ) {
     throw new Error(
-      "useRealtime harus digunakan di dalam RealtimeProvider.",
+      (
+        "useRealtime harus digunakan "
+        + "di dalam RealtimeProvider."
+      )
     );
   }
+
 
   return context;
 }
 
+
+/* =========================
+   EXPORT
+========================= */
 
 export {
   RealtimeProvider,

@@ -1,4 +1,6 @@
 import base64
+import time
+
 from datetime import (
     datetime,
     timezone,
@@ -26,24 +28,33 @@ from app.services.landmark_extractor import (
     LandmarkExtractor,
 )
 
-from app.preprocessing.multimodal_sequence import (
-    MultimodalSequenceBuilder,
+from app.preprocessing.realtime_sequence import (
+    RealtimeSequenceBuilder,
 )
 
 
 router = APIRouter(
-    tags=["Realtime"],
+    tags=[
+        "Realtime"
+    ],
 )
 
 
-FRAME_ACK_INTERVAL = 5
+# ============================================================
+# CONFIG
+# ============================================================
 
 INFERENCE_EVERY_N_FRAMES = 2
+
 
 MAX_FRAME_BYTES = (
     2_000_000
 )
 
+
+# ============================================================
+# TIME
+# ============================================================
 
 def utc_now():
     return datetime.now(
@@ -74,13 +85,19 @@ def decode_frame_base64(
 
     except Exception as error:
         raise ValueError(
-            "Frame bukan Base64 valid."
+            (
+                "Frame bukan "
+                "Base64 valid."
+            )
         ) from error
 
 
     if not frame_bytes:
         raise ValueError(
-            "Frame hasil decode kosong."
+            (
+                "Frame hasil decode "
+                "kosong."
+            )
         )
 
 
@@ -89,7 +106,10 @@ def decode_frame_base64(
         > MAX_FRAME_BYTES
     ):
         raise ValueError(
-            "Ukuran frame terlalu besar."
+            (
+                "Ukuran frame "
+                "terlalu besar."
+            )
         )
 
 
@@ -109,14 +129,26 @@ async def realtime_websocket(
     await websocket.accept()
 
 
+    # ========================================================
+    # SESSION STATE
+    # ========================================================
+
     frame_count = 0
+
 
     last_client_frame_id = (
         None
     )
 
-    last_prediction = None
 
+    last_prediction = (
+        None
+    )
+
+
+    # ========================================================
+    # SERVICES
+    # ========================================================
 
     extractor = (
         LandmarkExtractor()
@@ -124,7 +156,7 @@ async def realtime_websocket(
 
 
     sequence_builder = (
-        MultimodalSequenceBuilder()
+        RealtimeSequenceBuilder()
     )
 
 
@@ -134,7 +166,7 @@ async def realtime_websocket(
 
 
     # ========================================================
-    # CONNECTION
+    # CONNECTION READY
     # ========================================================
 
     await websocket.send_json(
@@ -171,6 +203,10 @@ async def realtime_websocket(
 
     try:
         while True:
+            # =================================================
+            # RECEIVE
+            # =================================================
+
             message = (
                 await websocket
                 .receive_json()
@@ -213,7 +249,7 @@ async def realtime_websocket(
 
 
             # =================================================
-            # HELLO
+            # CLIENT HELLO
             # =================================================
 
             if (
@@ -255,7 +291,7 @@ async def realtime_websocket(
 
 
             # =================================================
-            # RESET
+            # RESET SEQUENCE
             # =================================================
 
             if (
@@ -266,13 +302,18 @@ async def realtime_websocket(
 
                 stabilizer.reset()
 
+
                 frame_count = 0
+
 
                 last_client_frame_id = (
                     None
                 )
 
-                last_prediction = None
+
+                last_prediction = (
+                    None
+                )
 
 
                 await websocket.send_json(
@@ -297,6 +338,7 @@ async def realtime_websocket(
                     }
                 )
 
+
                 continue
 
 
@@ -308,7 +350,21 @@ async def realtime_websocket(
                 message_type
                 == "frame"
             ):
+                frame_id = (
+                    None
+                )
+
+
                 try:
+                    pipeline_started = (
+                        time.perf_counter()
+                    )
+
+
+                    # =========================================
+                    # FRAME ID
+                    # =========================================
+
                     frame_id = int(
                         message.get(
                             "frame_id",
@@ -330,9 +386,12 @@ async def realtime_websocket(
                     ):
                         frame_count = 0
 
+
                         sequence_builder.reset()
 
+
                         stabilizer.reset()
+
 
                         last_prediction = (
                             None
@@ -343,6 +402,10 @@ async def realtime_websocket(
                         frame_id
                     )
 
+
+                    # =========================================
+                    # FRAME META
+                    # =========================================
 
                     width = int(
                         message.get(
@@ -368,6 +431,10 @@ async def realtime_websocket(
                     )
 
 
+                    # =========================================
+                    # BASE64 DECODE
+                    # =========================================
+
                     frame_bytes = (
                         decode_frame_base64(
                             image_base64
@@ -387,13 +454,17 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # SEQUENCE
+                    # LAZY SEQUENCE RECORD
+                    #
+                    # Tidak build ulang seluruh
+                    # sequence 48 frame di sini.
                     # =========================================
 
                     sequence_status = (
                         sequence_builder
                         .add_frame(
                             frame_id,
+
                             result[
                                 "landmarks"
                             ],
@@ -405,7 +476,7 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # CURRENT HAND
+                    # COUNTS
                     # =========================================
 
                     counts = (
@@ -415,22 +486,35 @@ async def realtime_websocket(
                     )
 
 
-                    current_hand_detected = (
-                        counts[
-                            "left_hand"
-                        ]
-                        > 0
+                    # =========================================
+                    # CURRENT HAND
+                    # =========================================
 
-                        or counts[
-                            "right_hand"
-                        ]
-                        > 0
+                    current_hand_detected = (
+                        (
+                            counts[
+                                "left_hand"
+                            ]
+                            > 0
+                        )
+
+                        or
+
+                        (
+                            counts[
+                                "right_hand"
+                            ]
+                            > 0
+                        )
                     )
 
 
                     # =========================================
-                    # RAW INFERENCE + STABILIZATION
+                    # BUILD + MODEL
                     # =========================================
+
+                    build_ms = 0.0
+
 
                     if (
                         sequence_status[
@@ -441,16 +525,31 @@ async def realtime_websocket(
                             last_prediction
                             is None
 
-                            or frame_count
-                            % INFERENCE_EVERY_N_FRAMES
-                            == 0
+                            or
+
+                            (
+                                frame_count
+                                % INFERENCE_EVERY_N_FRAMES
+                                == 0
+                            )
                         )
 
 
                         if should_infer:
+                            # =================================
+                            # BUILD FULL 48 FRAME
+                            # HANYA SEKARANG
+                            # =================================
+
                             ready_sequences = (
                                 sequence_builder
                                 .get_ready_sequences()
+                            )
+
+
+                            build_ms = (
+                                sequence_builder
+                                .last_build_ms
                             )
 
 
@@ -458,6 +557,10 @@ async def realtime_websocket(
                                 ready_sequences
                                 is not None
                             ):
+                                # =============================
+                                # RAW AI
+                                # =============================
+
                                 raw_prediction = (
                                     bisindo_predictor
                                     .predict(
@@ -466,9 +569,14 @@ async def realtime_websocket(
                                 )
 
 
+                                # =============================
+                                # STABILIZATION
+                                # =============================
+
                                 last_prediction = (
                                     stabilizer.update(
                                         raw_prediction,
+
                                         current_hand_detected=(
                                             current_hand_detected
                                         ),
@@ -481,11 +589,49 @@ async def realtime_websocket(
                             None
                         )
 
+
                         stabilizer.reset()
 
 
                     # =========================================
-                    # SEND RESULT
+                    # PREPROCESSING PERFORMANCE
+                    # =========================================
+
+                    sequence_status[
+                        "sequence_build_ms"
+                    ] = round(
+                        build_ms,
+                        3,
+                    )
+
+
+                    sequence_status[
+                        "preprocessing_ms"
+                    ] = round(
+                        (
+                            sequence_builder
+                            .last_record_ms
+                        )
+                        + build_ms,
+                        3,
+                    )
+
+
+                    # =========================================
+                    # TOTAL PIPELINE TIME
+                    # =========================================
+
+                    pipeline_ms = (
+                        (
+                            time.perf_counter()
+                            - pipeline_started
+                        )
+                        * 1000.0
+                    )
+
+
+                    # =========================================
+                    # SEND ONE RESULT PER FRAME
                     # =========================================
 
                     await websocket.send_json(
@@ -499,6 +645,17 @@ async def realtime_websocket(
                             "frame_id":
                                 frame_id,
 
+                            "width":
+                                width,
+
+                            "height":
+                                height,
+
+                            "frame_bytes":
+                                len(
+                                    frame_bytes
+                                ),
+
                             "landmarks":
                                 result[
                                     "landmarks"
@@ -511,6 +668,12 @@ async def realtime_websocket(
                                 result[
                                     "processing_ms"
                                 ],
+
+                            "pipeline_ms":
+                                round(
+                                    pipeline_ms,
+                                    2,
+                                ),
 
                             "sequence":
                                 sequence_status,
@@ -528,46 +691,6 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # ACK
-                    # =========================================
-
-                    if (
-                        frame_count
-                        % FRAME_ACK_INTERVAL
-                        == 0
-                    ):
-                        await websocket.send_json(
-                            {
-                                "type":
-                                    "frame_ack",
-
-                                "status":
-                                    "ok",
-
-                                "frame_id":
-                                    frame_id,
-
-                                "received_frames":
-                                    frame_count,
-
-                                "width":
-                                    width,
-
-                                "height":
-                                    height,
-
-                                "bytes":
-                                    len(
-                                        frame_bytes
-                                    ),
-
-                                "server_time":
-                                    utc_now(),
-                            }
-                        )
-
-
-                    # =========================================
                     # TERMINAL LOG
                     # =========================================
 
@@ -579,6 +702,9 @@ async def realtime_websocket(
                         prediction_text = (
                             "-"
                         )
+
+
+                        inference_ms = 0.0
 
 
                         if (
@@ -654,6 +780,15 @@ async def realtime_websocket(
                             )
 
 
+                            inference_ms = float(
+                                last_prediction.get(
+                                    "inference_ms",
+                                    0.0,
+                                )
+                                or 0.0
+                            )
+
+
                             prediction_text = (
                                 f"raw={raw_label} "
                                 f"{raw_conf:.1f}% "
@@ -667,26 +802,43 @@ async def realtime_websocket(
 
                         print(
                             "[Realtime] "
+
                             f"frame={frame_count} "
+
                             f"seq="
                             f"{sequence_status['count']}/48 "
+
                             f"ready="
                             f"{sequence_status['ready']} "
+
                             f"handL="
                             f"{counts['left_hand']} "
+
                             f"handR="
                             f"{counts['right_hand']} "
-                            f"body="
-                            f"{counts['pose']} "
-                            f"face="
-                            f"{counts['face']} "
+
                             f"vision="
                             f"{result['processing_ms']}ms "
-                            f"prep="
-                            f"{sequence_status['preprocessing_ms']}ms "
+
+                            f"record="
+                            f"{sequence_builder.last_record_ms:.2f}ms "
+
+                            f"build="
+                            f"{build_ms:.2f}ms "
+
+                            f"infer="
+                            f"{inference_ms:.2f}ms "
+
+                            f"total="
+                            f"{pipeline_ms:.2f}ms "
+
                             f"{prediction_text}"
                         )
 
+
+                # =================================================
+                # FRAME INPUT ERROR
+                # =================================================
 
                 except ValueError as error:
                     await websocket.send_json(
@@ -697,14 +849,23 @@ async def realtime_websocket(
                             "status":
                                 "error",
 
+                            "frame_id":
+                                frame_id,
+
                             "message":
-                                str(error),
+                                str(
+                                    error
+                                ),
 
                             "server_time":
                                 utc_now(),
                         }
                     )
 
+
+                # =================================================
+                # VISION / MODEL ERROR
+                # =================================================
 
                 except Exception as error:
                     print(
@@ -722,8 +883,13 @@ async def realtime_websocket(
                             "status":
                                 "error",
 
+                            "frame_id":
+                                frame_id,
+
                             "message":
-                                str(error),
+                                str(
+                                    error
+                                ),
 
                             "server_time":
                                 utc_now(),
@@ -735,7 +901,7 @@ async def realtime_websocket(
 
 
             # =================================================
-            # GENERIC ACK
+            # UNKNOWN MESSAGE
             # =================================================
 
             await websocket.send_json(
@@ -755,6 +921,10 @@ async def realtime_websocket(
             )
 
 
+    # ========================================================
+    # CLIENT DISCONNECTED
+    # ========================================================
+
     except WebSocketDisconnect:
         print(
             "[WebSocket] "
@@ -763,6 +933,10 @@ async def realtime_websocket(
         )
 
 
+    # ========================================================
+    # SERVER ERROR
+    # ========================================================
+
     except Exception as error:
         print(
             "[WebSocket] Error:",
@@ -770,10 +944,16 @@ async def realtime_websocket(
         )
 
 
+    # ========================================================
+    # CLEANUP
+    # ========================================================
+
     finally:
         sequence_builder.reset()
 
+
         stabilizer.reset()
+
 
         extractor.close()
 

@@ -9,34 +9,123 @@ import {
 } from "../contexts/RealtimeContext";
 
 
-const FRAME_WIDTH = 640;
+/* =========================
+   FRAME CONFIG
+========================= */
 
 /*
- * 100 ms = 10 FPS
+ * Sebelumnya 640.
  *
- * 48 frame ≈ 4.8 detik.
+ * Kita turunkan ke 512
+ * untuk meringankan:
+ * - JPEG encode
+ * - WebSocket payload
+ * - OpenCV decode
+ * - MediaPipe vision
+ *
+ * Landmark MediaPipe menggunakan
+ * koordinat normalized, sehingga
+ * dimensi feature model tidak berubah.
  */
-const FRAME_INTERVAL_MS = 100;
+const FRAME_WIDTH = 512;
 
-const JPEG_QUALITY = 0.65;
+
+/*
+ * Maksimum tetap 10 FPS.
+ *
+ * Kita tidak sengaja mengubah
+ * temporal target menjadi 5 FPS.
+ */
+const TARGET_FPS = 10;
+
+
+const TARGET_FRAME_INTERVAL_MS =
+  1000 / TARGET_FPS;
+
+
+/*
+ * Scheduler dicek lebih cepat.
+ *
+ * Bukan berarti mengirim 50 FPS.
+ * Pengiriman tetap dibatasi oleh
+ * TARGET_FRAME_INTERVAL_MS.
+ */
+const SCHEDULER_INTERVAL_MS = 20;
+
+
+/*
+ * Sedikit lebih ringan daripada
+ * quality 0.65 sebelumnya.
+ */
+const JPEG_QUALITY = 0.60;
+
+
+/*
+ * Safety timeout.
+ *
+ * Kalau response backend benar-benar
+ * hilang, streamer tidak deadlock.
+ */
+const MAX_IN_FLIGHT_MS = 1500;
 
 
 function useFrameStreamer({
   videoRef,
   isCameraActive,
 }) {
+  /* =========================
+     REFS
+  ========================= */
+
   const canvasRef =
     useRef(null);
+
 
   const frameIdRef =
     useRef(0);
 
+
   const sentFramesRef =
     useRef(0);
+
 
   const previousCameraStateRef =
     useRef(false);
 
+
+  /*
+   * BACKPRESSURE
+   */
+  const waitingForBackendRef =
+    useRef(false);
+
+
+  const pendingFrameIdRef =
+    useRef(null);
+
+
+  const inFlightStartedAtRef =
+    useRef(0);
+
+
+  /*
+   * FPS
+   */
+  const lastSentAtRef =
+    useRef(0);
+
+
+  const previousSuccessfulSendRef =
+    useRef(0);
+
+
+  const smoothedFpsRef =
+    useRef(0);
+
+
+  /* =========================
+     REALTIME CONTEXT
+  ========================= */
 
   const {
     isConnected,
@@ -44,6 +133,10 @@ function useFrameStreamer({
     lastMessage,
   } = useRealtime();
 
+
+  /* =========================
+     STATE
+  ========================= */
 
   const [
     sentFrames,
@@ -69,6 +162,12 @@ function useFrameStreamer({
   ] = useState(false);
 
 
+  const [
+    streamFps,
+    setStreamFps,
+  ] = useState(0);
+
+
   /* =========================
      RESET CAMERA SESSION
   ========================= */
@@ -77,51 +176,237 @@ function useFrameStreamer({
     const wasActive =
       previousCameraStateRef.current;
 
+
     if (
       isCameraActive &&
       !wasActive
     ) {
-      frameIdRef.current = 0;
+      frameIdRef.current =
+        0;
 
-      sentFramesRef.current = 0;
 
-      setSentFrames(0);
-      setReceivedFrames(0);
-      setLastFrameBytes(0);
+      sentFramesRef.current =
+        0;
+
+
+      waitingForBackendRef.current =
+        false;
+
+
+      pendingFrameIdRef.current =
+        null;
+
+
+      inFlightStartedAtRef.current =
+        0;
+
+
+      lastSentAtRef.current =
+        0;
+
+
+      previousSuccessfulSendRef.current =
+        0;
+
+
+      smoothedFpsRef.current =
+        0;
+
+
+      setSentFrames(
+        0
+      );
+
+
+      setReceivedFrames(
+        0
+      );
+
+
+      setLastFrameBytes(
+        0
+      );
+
+
+      setStreamFps(
+        0
+      );
     }
+
+
+    if (
+      !isCameraActive
+    ) {
+      waitingForBackendRef.current =
+        false;
+
+
+      pendingFrameIdRef.current =
+        null;
+
+
+      inFlightStartedAtRef.current =
+        0;
+    }
+
 
     previousCameraStateRef.current =
       isCameraActive;
 
-  }, [isCameraActive]);
+  }, [
+    isCameraActive,
+  ]);
 
 
   /* =========================
-     FRAME ACK
+     BACKEND FRAME RESPONSE
   ========================= */
 
   useEffect(() => {
     if (
-      lastMessage?.type !==
-      "frame_ack"
+      !lastMessage
     ) {
       return;
     }
 
-    setReceivedFrames(
+
+    const messageType =
+      lastMessage.type;
+
+
+    const isFrameResponse =
+      (
+        messageType ===
+        "landmarks"
+      )
+
+      ||
+
+      (
+        messageType ===
+        "frame_error"
+      )
+
+      ||
+
+      (
+        messageType ===
+        "vision_error"
+      );
+
+
+    if (
+      !isFrameResponse
+    ) {
+      return;
+    }
+
+
+    const responseFrameId =
       Number(
         lastMessage
-          .received_frames ?? 0,
-      ),
+          .frame_id ??
+        0
+      );
+
+
+    const pendingFrameId =
+      pendingFrameIdRef.current;
+
+
+    /*
+     * Backend sudah selesai
+     * memproses frame in-flight.
+     */
+    if (
+      pendingFrameId !== null
+
+      &&
+
+      (
+        responseFrameId <= 0
+
+        ||
+
+        responseFrameId
+        >= pendingFrameId
+      )
+    ) {
+      waitingForBackendRef.current =
+        false;
+
+
+      pendingFrameIdRef.current =
+        null;
+
+
+      inFlightStartedAtRef.current =
+        0;
+    }
+
+
+    /* =========================
+       SUCCESSFUL FRAME
+    ========================= */
+
+    if (
+      messageType ===
+      "landmarks"
+    ) {
+      if (
+        responseFrameId > 0
+      ) {
+        setReceivedFrames(
+          responseFrameId
+        );
+      }
+
+
+      setLastFrameBytes(
+        Number(
+          lastMessage
+            .frame_bytes ??
+          0
+        )
+      );
+    }
+
+  }, [
+    lastMessage,
+  ]);
+
+
+  /* =========================
+     DISCONNECTED
+  ========================= */
+
+  useEffect(() => {
+    if (
+      isConnected
+    ) {
+      return;
+    }
+
+
+    waitingForBackendRef.current =
+      false;
+
+
+    pendingFrameIdRef.current =
+      null;
+
+
+    inFlightStartedAtRef.current =
+      0;
+
+
+    setIsStreaming(
+      false
     );
 
-    setLastFrameBytes(
-      Number(
-        lastMessage.bytes ?? 0,
-      ),
-    );
-
-  }, [lastMessage]);
+  }, [
+    isConnected,
+  ]);
 
 
   /* =========================
@@ -133,19 +418,29 @@ function useFrameStreamer({
       !isCameraActive ||
       !isConnected
     ) {
-      setIsStreaming(false);
+      setIsStreaming(
+        false
+      );
 
       return undefined;
     }
 
 
-    setIsStreaming(true);
+    setIsStreaming(
+      true
+    );
 
 
-    if (!canvasRef.current) {
+    /* =========================
+       CANVAS
+    ========================= */
+
+    if (
+      !canvasRef.current
+    ) {
       canvasRef.current =
         document.createElement(
-          "canvas",
+          "canvas"
         );
     }
 
@@ -158,29 +453,111 @@ function useFrameStreamer({
       canvas.getContext(
         "2d",
         {
-          alpha: false,
-        },
+          alpha:
+            false,
+        }
       );
 
 
-    if (!context) {
+    if (
+      !context
+    ) {
       console.error(
-        "[FrameStreamer] " +
-        "Canvas context gagal dibuat.",
+        (
+          "[FrameStreamer] "
+          + "Canvas context gagal dibuat."
+        )
       );
 
-      setIsStreaming(false);
+
+      setIsStreaming(
+        false
+      );
+
 
       return undefined;
     }
 
 
+    /* =========================
+       CAPTURE
+    ========================= */
+
     const captureFrame = () => {
+      const now =
+        performance.now();
+
+
+      /* =====================
+         BACKPRESSURE
+      ===================== */
+
+      if (
+        waitingForBackendRef.current
+      ) {
+        const waitingMs =
+          (
+            now
+            - inFlightStartedAtRef.current
+          );
+
+
+        if (
+          waitingMs
+          < MAX_IN_FLIGHT_MS
+        ) {
+          return;
+        }
+
+
+        /*
+         * Safety reset jika response
+         * backend hilang terlalu lama.
+         */
+        waitingForBackendRef.current =
+          false;
+
+
+        pendingFrameIdRef.current =
+          null;
+
+
+        inFlightStartedAtRef.current =
+          0;
+      }
+
+
+      /* =====================
+         MAX TARGET FPS
+      ===================== */
+
+      if (
+        lastSentAtRef.current > 0
+
+        &&
+
+        (
+          now
+          - lastSentAtRef.current
+        )
+        <
+        TARGET_FRAME_INTERVAL_MS
+      ) {
+        return;
+      }
+
+
+      /* =====================
+         VIDEO
+      ===================== */
+
       const video =
         videoRef.current;
 
 
-      if (!video) {
+      if (
+        !video
+      ) {
         return;
       }
 
@@ -208,16 +585,22 @@ function useFrameStreamer({
       }
 
 
+      /* =====================
+         RESIZE
+      ===================== */
+
       const targetWidth =
         Math.min(
           FRAME_WIDTH,
-          sourceWidth,
+          sourceWidth
         );
 
 
       const scale =
-        targetWidth /
-        sourceWidth;
+        (
+          targetWidth
+          / sourceWidth
+        );
 
 
       const targetHeight =
@@ -225,9 +608,9 @@ function useFrameStreamer({
           1,
 
           Math.round(
-            sourceHeight *
-            scale,
-          ),
+            sourceHeight
+            * scale
+          )
         );
 
 
@@ -249,29 +632,37 @@ function useFrameStreamer({
       }
 
 
-      /*
-       * RAW FRAME.
-       *
-       * Jangan mirror data model.
-       */
+      /* =====================
+         RAW FRAME
+         NO MIRROR
+      ===================== */
+
       context.drawImage(
         video,
+
         0,
         0,
+
         targetWidth,
-        targetHeight,
+        targetHeight
       );
 
+
+      /* =====================
+         JPEG
+      ===================== */
 
       const dataUrl =
         canvas.toDataURL(
           "image/jpeg",
-          JPEG_QUALITY,
+          JPEG_QUALITY
         );
 
 
       const separatorIndex =
-        dataUrl.indexOf(",");
+        dataUrl.indexOf(
+          ","
+        );
 
 
       if (
@@ -283,9 +674,13 @@ function useFrameStreamer({
 
       const imageBase64 =
         dataUrl.slice(
-          separatorIndex + 1,
+          separatorIndex + 1
         );
 
+
+      /* =====================
+         FRAME ID
+      ===================== */
 
       frameIdRef.current += 1;
 
@@ -294,9 +689,14 @@ function useFrameStreamer({
         frameIdRef.current;
 
 
+      /* =====================
+         SEND
+      ===================== */
+
       const sent =
         sendMessage({
-          type: "frame",
+          type:
+            "frame",
 
           frame_id:
             frameId,
@@ -319,29 +719,159 @@ function useFrameStreamer({
         });
 
 
-      if (sent) {
-        sentFramesRef.current += 1;
+      if (
+        !sent
+      ) {
+        return;
+      }
 
-        setSentFrames(
-          sentFramesRef.current,
+
+      /* =====================
+         MARK IN-FLIGHT
+      ===================== */
+
+      waitingForBackendRef.current =
+        true;
+
+
+      pendingFrameIdRef.current =
+        frameId;
+
+
+      inFlightStartedAtRef.current =
+        now;
+
+
+      lastSentAtRef.current =
+        now;
+
+
+      /* =====================
+         SENT COUNT
+      ===================== */
+
+      sentFramesRef.current += 1;
+
+
+      setSentFrames(
+        sentFramesRef.current
+      );
+
+
+      /* =====================
+         EFFECTIVE FPS
+      ===================== */
+
+      const previousSend =
+        previousSuccessfulSendRef.current;
+
+
+      if (
+        previousSend > 0
+      ) {
+        const delta =
+          (
+            now
+            - previousSend
+          );
+
+
+        if (
+          delta > 0
+        ) {
+          const instantFps =
+            (
+              1000
+              / delta
+            );
+
+
+          if (
+            smoothedFpsRef.current
+            <= 0
+          ) {
+            smoothedFpsRef.current =
+              instantFps;
+          }
+
+          else {
+            smoothedFpsRef.current =
+              (
+                (
+                  0.80
+                  * smoothedFpsRef.current
+                )
+
+                +
+
+                (
+                  0.20
+                  * instantFps
+                )
+              );
+          }
+
+
+          setStreamFps(
+            Math.max(
+              1,
+
+              Math.round(
+                smoothedFpsRef.current
+              )
+            )
+          );
+        }
+      }
+
+      else {
+        setStreamFps(
+          TARGET_FPS
         );
       }
+
+
+      previousSuccessfulSendRef.current =
+        now;
     };
 
+
+    /* =========================
+       SCHEDULER
+    ========================= */
 
     const intervalId =
       window.setInterval(
         captureFrame,
-        FRAME_INTERVAL_MS,
+        SCHEDULER_INTERVAL_MS
       );
 
+
+    /* =========================
+       CLEANUP
+    ========================= */
 
     return () => {
       window.clearInterval(
-        intervalId,
+        intervalId
       );
 
-      setIsStreaming(false);
+
+      waitingForBackendRef.current =
+        false;
+
+
+      pendingFrameIdRef.current =
+        null;
+
+
+      inFlightStartedAtRef.current =
+        0;
+
+
+      setIsStreaming(
+        false
+      );
     };
 
   }, [
@@ -352,17 +882,22 @@ function useFrameStreamer({
   ]);
 
 
+  /* =========================
+     OUTPUT
+  ========================= */
+
   return {
     isStreaming,
 
-    streamFps:
-      Math.round(
-        1000 /
-        FRAME_INTERVAL_MS,
-      ),
+    streamFps,
+
+    targetFps:
+      TARGET_FPS,
 
     sentFrames,
+
     receivedFrames,
+
     lastFrameBytes,
   };
 }
