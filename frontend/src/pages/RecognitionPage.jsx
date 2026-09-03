@@ -65,7 +65,7 @@ function RecognitionPage() {
 
 
   /* =========================
-     VISION + SEQUENCE
+     VISION + SEQUENCE + AI
   ========================= */
 
   const {
@@ -79,11 +79,19 @@ function RecognitionPage() {
     sequenceReady,
     sequencePreprocessingMs,
     sequenceShapes,
+
+    predictionStatus,
+    predictionLabel,
+    predictionClassId,
+    predictionConfidencePercent,
+    predictionInferenceMs,
+    predictionHandPresentFrames,
+    predictionTop3,
   } = useRealtimeLandmarks();
 
 
   /* =========================
-     STATUS
+     BACKEND STATUS
   ========================= */
 
   const BackendIcon =
@@ -105,6 +113,10 @@ function RecognitionPage() {
       : "Offline";
   };
 
+
+  /* =========================
+     CAMERA STATUS
+  ========================= */
 
   const getCameraStatusText = () => {
     if (
@@ -160,6 +172,11 @@ function RecognitionPage() {
       : 0;
 
 
+  const hasPrediction =
+    predictionStatus === "ok" &&
+    Boolean(predictionLabel);
+
+
   /* =========================
      CAMERA INFO
   ========================= */
@@ -192,7 +209,7 @@ function RecognitionPage() {
 
 
   /* =========================
-     PREDICTION INFO
+     PREDICTION VALUE
   ========================= */
 
   const getPredictionValue = () => {
@@ -204,9 +221,31 @@ function RecognitionPage() {
       return "Mengisi Sequence";
     }
 
-    return "Menunggu AI";
+    if (
+      predictionStatus ===
+      "waiting_for_hand"
+    ) {
+      return "Menunggu Gerakan";
+    }
+
+    if (
+      predictionStatus ===
+      "model_not_loaded"
+    ) {
+      return "Model Offline";
+    }
+
+    if (hasPrediction) {
+      return predictionLabel;
+    }
+
+    return "Memproses AI";
   };
 
+
+  /* =========================
+     PREDICTION SUBTITLE
+  ========================= */
 
   const getPredictionSubtitle = () => {
     if (!isCameraActive) {
@@ -230,10 +269,234 @@ function RecognitionPage() {
       );
     }
 
+    if (
+      predictionStatus ===
+      "waiting_for_hand"
+    ) {
+      return (
+        "Sequence siap, tetapi tangan " +
+        "belum cukup terdeteksi."
+      );
+    }
+
+    if (
+      predictionStatus ===
+      "model_not_loaded"
+    ) {
+      return (
+        "Model TorchScript belum tersedia."
+      );
+    }
+
+    if (hasPrediction) {
+      return (
+        `Raw inference · ` +
+        `class ${predictionClassId} · ` +
+        `${predictionInferenceMs ?? "--"} ms.`
+      );
+    }
+
     return (
-      "Sequence 48 frame siap. " +
-      "Model klasifikasi belum dimuat."
+      "Sequence siap. Menunggu " +
+      "hasil inference model."
     );
+  };
+
+
+  /* =========================
+     CONFIDENCE
+  ========================= */
+
+  const getConfidenceText = () => {
+    if (!hasPrediction) {
+      return "--";
+    }
+
+    return (
+      `${Number(
+        predictionConfidencePercent ?? 0,
+      ).toFixed(1)}%`
+    );
+  };
+
+
+  /* =========================
+     TOP 3 TEXT
+  ========================= */
+
+  const getTop3Text = () => {
+    if (
+      !Array.isArray(
+        predictionTop3
+      ) ||
+      predictionTop3.length === 0
+    ) {
+      return "--";
+    }
+
+    return predictionTop3
+      .map((item) => {
+        const confidence =
+          Number(
+            item.confidence_percent ??
+            0,
+          ).toFixed(1);
+
+        return (
+          `${item.label} ` +
+          `${confidence}%`
+        );
+      })
+      .join(" · ");
+  };
+
+
+  /* =========================
+     STATUS MESSAGE
+  ========================= */
+
+  const getStatusMessage = () => {
+    if (hasPrediction) {
+      return (
+        `AI aktif · ` +
+        `${predictionLabel} ` +
+        `${Number(
+          predictionConfidencePercent ?? 0,
+        ).toFixed(1)}% · ` +
+        `inference ` +
+        `${predictionInferenceMs ?? "--"} ms · ` +
+        `hand ` +
+        `${predictionHandPresentFrames ?? 0}/48 · ` +
+        `Top-3: ${getTop3Text()}`
+      );
+    }
+
+    if (
+      predictionStatus ===
+      "waiting_for_hand"
+    ) {
+      return (
+        `Sequence 48/48 siap · ` +
+        `tangan terdeteksi ` +
+        `${predictionHandPresentFrames ?? 0}/48 frame · ` +
+        `menunggu gerakan.`
+      );
+    }
+
+    if (
+      predictionStatus ===
+      "model_not_loaded"
+    ) {
+      return (
+        "Model TorchScript tidak aktif. " +
+        "Periksa backend model runtime."
+      );
+    }
+
+    if (sequenceReady) {
+      return (
+        `Sequence siap · ` +
+        `Hand ${sequenceShapes.hand.join("×")} · ` +
+        `Pose ${sequenceShapes.pose.join("×")} · ` +
+        `FaceHead ${sequenceShapes.facehead.join("×")} · ` +
+        `Multi ${sequenceShapes.multimodal.join("×")} · ` +
+        `prep ${sequencePreprocessingMs ?? "--"} ms · ` +
+        `menunggu inference.`
+      );
+    }
+
+    if (hasVisionData) {
+      return (
+        `Vision aktif · ` +
+        `frame ${lastFrameId} · ` +
+        `sequence ${sequenceCount}/${sequenceTarget} · ` +
+        `Hand ${totalHandLandmarks} · ` +
+        `Body ${totalPoseLandmarks} · ` +
+        `Face ${totalFaceLandmarks} · ` +
+        `vision ${processingMs ?? "--"} ms.`
+      );
+    }
+
+    if (isStreaming) {
+      return (
+        `Frame kamera dikirim ke backend · ` +
+        `${sentFrames} sent · ` +
+        `${receivedFrames} diterima · ` +
+        `${lastFrameBytes} byte.`
+      );
+    }
+
+    if (
+      backendStatus ===
+      "checking"
+    ) {
+      return (
+        "Sedang memeriksa koneksi " +
+        "backend FastAPI..."
+      );
+    }
+
+    if (isBackendOnline) {
+      return (
+        "Backend FastAPI terhubung. " +
+        "Aktifkan kamera."
+      );
+    }
+
+    return (
+      "Backend tidak terhubung. " +
+      "Jalankan FastAPI terlebih dahulu."
+    );
+  };
+
+
+  /* =========================
+     HEADER STATUS
+  ========================= */
+
+  const getWorkspaceStatus = () => {
+    if (hasPrediction) {
+      return "AI Active";
+    }
+
+    if (sequenceReady) {
+      return "Sequence Ready";
+    }
+
+    if (hasVisionData) {
+      return "Vision Active";
+    }
+
+    if (isStreaming) {
+      return "Frame Streaming";
+    }
+
+    return "Frontend Ready";
+  };
+
+
+  /* =========================
+     CAMERA BADGE
+  ========================= */
+
+  const getCameraBadge = () => {
+    if (hasPrediction) {
+      return "AI";
+    }
+
+    if (sequenceReady) {
+      return "SEQUENCE";
+    }
+
+    if (hasVisionData) {
+      return "VISION";
+    }
+
+    if (isStreaming) {
+      return "STREAMING";
+    }
+
+    return "LIVE";
   };
 
 
@@ -263,13 +526,7 @@ function RecognitionPage() {
         <div className="recognition-heading-status">
           <span className="heading-status-dot" />
 
-          {sequenceReady
-            ? "Sequence Ready"
-            : hasVisionData
-              ? "Vision Active"
-              : isStreaming
-                ? "Frame Streaming"
-                : "Frontend Ready"}
+          {getWorkspaceStatus()}
         </div>
       </section>
 
@@ -279,6 +536,10 @@ function RecognitionPage() {
       ========================== */}
 
       <section className="recognition-workspace">
+        {/* =========================
+            CAMERA PANEL
+        ========================== */}
+
         <div className="camera-panel">
           <div className="camera-panel-header">
             <div>
@@ -308,7 +569,9 @@ function RecognitionPage() {
           </div>
 
 
-          {/* CAMERA */}
+          {/* =========================
+              CAMERA PREVIEW
+          ========================== */}
 
           <div className="camera-preview">
             <video
@@ -324,6 +587,8 @@ function RecognitionPage() {
             />
 
 
+            {/* LANDMARK CANVAS */}
+
             {isCameraActive && (
               <LandmarkCanvas
                 landmarks={landmarks}
@@ -332,11 +597,18 @@ function RecognitionPage() {
             )}
 
 
+            {/* CORNERS */}
+
             <div className="camera-corner top-left" />
+
             <div className="camera-corner top-right" />
+
             <div className="camera-corner bottom-left" />
+
             <div className="camera-corner bottom-right" />
 
+
+            {/* PLACEHOLDER */}
 
             {!isCameraActive && (
               <div className="camera-placeholder">
@@ -385,6 +657,8 @@ function RecognitionPage() {
             )}
 
 
+            {/* OVERLAY BADGE */}
+
             <div className="camera-overlay-badge">
               <ScanLine
                 size={14}
@@ -395,20 +669,18 @@ function RecognitionPage() {
             </div>
 
 
+            {/* LIVE BADGE */}
+
             {isCameraActive && (
               <div className="camera-live-badge">
                 <span />
 
-                {sequenceReady
-                  ? "SEQUENCE"
-                  : hasVisionData
-                    ? "VISION"
-                    : isStreaming
-                      ? "STREAMING"
-                      : "LIVE"}
+                {getCameraBadge()}
               </div>
             )}
 
+
+            {/* LANDMARK STATUS */}
 
             {isCameraActive && (
               <div className="landmark-debug-status">
@@ -446,7 +718,9 @@ function RecognitionPage() {
           </div>
 
 
-          {/* CONTROLS */}
+          {/* =========================
+              CAMERA CONTROLS
+          ========================== */}
 
           <div className="camera-controls">
             <button
@@ -470,6 +744,7 @@ function RecognitionPage() {
                 : "Mulai Kamera"}
             </button>
 
+
             <button
               type="button"
               className="recognition-control secondary"
@@ -484,6 +759,7 @@ function RecognitionPage() {
               Hentikan
             </button>
 
+
             <div className="camera-control-info">
               {getCameraInfoText()}
             </div>
@@ -492,7 +768,7 @@ function RecognitionPage() {
 
 
         {/* =========================
-            RESULT
+            RESULT PANEL
         ========================== */}
 
         <aside className="recognition-result-panel">
@@ -513,6 +789,10 @@ function RecognitionPage() {
             />
           </div>
 
+
+          {/* =========================
+              CURRENT PREDICTION
+          ========================== */}
 
           <div className="prediction-card">
             <div className="prediction-icon">
@@ -536,9 +816,13 @@ function RecognitionPage() {
           </div>
 
 
-          {/* METRICS */}
+          {/* =========================
+              METRICS
+          ========================== */}
 
           <div className="prediction-metrics">
+            {/* CONFIDENCE */}
+
             <div className="prediction-metric">
               <div className="metric-icon">
                 <Gauge
@@ -553,11 +837,13 @@ function RecognitionPage() {
                 </span>
 
                 <strong>
-                  --
+                  {getConfidenceText()}
                 </strong>
               </div>
             </div>
 
+
+            {/* SEQUENCE */}
 
             <div className="prediction-metric">
               <div className="metric-icon">
@@ -580,6 +866,8 @@ function RecognitionPage() {
               </div>
             </div>
 
+
+            {/* BACKEND */}
 
             <div className="prediction-metric">
               <div
@@ -604,7 +892,9 @@ function RecognitionPage() {
           </div>
 
 
-          {/* MODEL */}
+          {/* =========================
+              MODEL INFO
+          ========================== */}
 
           <div className="model-info-card">
             <div className="model-info-header">
@@ -628,7 +918,9 @@ function RecognitionPage() {
           </div>
 
 
-          {/* STATUS */}
+          {/* =========================
+              AI STATUS
+          ========================== */}
 
           <div
             className={`recognition-warning ${
@@ -643,38 +935,7 @@ function RecognitionPage() {
             />
 
             <p>
-              {sequenceReady
-                ? (
-                    `Sequence siap · ` +
-                    `Hand ${sequenceShapes.hand.join("×")} · ` +
-                    `Pose ${sequenceShapes.pose.join("×")} · ` +
-                    `FaceHead ${sequenceShapes.facehead.join("×")} · ` +
-                    `Multi ${sequenceShapes.multimodal.join("×")} · ` +
-                    `prep ${sequencePreprocessingMs ?? "--"} ms.`
-                  )
-                : hasVisionData
-                  ? (
-                      `Vision aktif · ` +
-                      `frame ${lastFrameId} · ` +
-                      `sequence ${sequenceCount}/${sequenceTarget} · ` +
-                      `Hand ${totalHandLandmarks} · ` +
-                      `Body ${totalPoseLandmarks} · ` +
-                      `Face ${totalFaceLandmarks} · ` +
-                      `vision ${processingMs ?? "--"} ms.`
-                    )
-                  : isStreaming
-                    ? (
-                        `Frame kamera dikirim ke backend · ` +
-                        `${sentFrames} sent · ` +
-                        `${receivedFrames} diterima · ` +
-                        `${lastFrameBytes} byte.`
-                      )
-                    : backendStatus ===
-                        "checking"
-                      ? "Sedang memeriksa koneksi backend FastAPI..."
-                      : isBackendOnline
-                        ? "Backend FastAPI terhubung. Aktifkan kamera."
-                        : "Backend tidak terhubung. Jalankan FastAPI terlebih dahulu."}
+              {getStatusMessage()}
             </p>
           </div>
         </aside>
@@ -703,7 +964,9 @@ function RecognitionPage() {
               strokeWidth={1.7}
             />
 
-            Waiting
+            {hasPrediction
+              ? "Recognizing"
+              : "Waiting"}
           </div>
         </div>
 
@@ -714,8 +977,17 @@ function RecognitionPage() {
           />
 
           <p>
-            Hasil pengenalan akan disusun
-            dan ditampilkan di sini.
+            {hasPrediction
+              ? (
+                  `Prediksi sementara: ` +
+                  `${predictionLabel}. ` +
+                  `Transcript stabil akan ` +
+                  `diaktifkan pada tahap berikutnya.`
+                )
+              : (
+                  "Hasil pengenalan akan disusun " +
+                  "dan ditampilkan di sini."
+                )}
           </p>
         </div>
       </section>

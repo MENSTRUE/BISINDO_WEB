@@ -39,6 +39,25 @@ const EMPTY_SEQUENCE = {
 };
 
 
+const EMPTY_PREDICTION = {
+  status: "idle",
+
+  label: null,
+
+  classId: null,
+
+  confidence: 0,
+
+  confidencePercent: 0,
+
+  inferenceMs: null,
+
+  handPresentFrames: 0,
+
+  top3: [],
+};
+
+
 function useRealtimeLandmarks() {
   const {
     lastMessage,
@@ -82,6 +101,14 @@ function useRealtimeLandmarks() {
   );
 
 
+  const [
+    prediction,
+    setPrediction,
+  ] = useState(
+    EMPTY_PREDICTION,
+  );
+
+
   /* =========================
      LANDMARK MESSAGE
   ========================= */
@@ -94,6 +121,10 @@ function useRealtimeLandmarks() {
       return;
     }
 
+
+    /* =========================
+       LANDMARKS
+    ========================= */
 
     const nextLandmarks = {
       leftHand:
@@ -147,6 +178,10 @@ function useRealtimeLandmarks() {
     );
 
 
+    /* =========================
+       COUNTS
+    ========================= */
+
     setCounts({
       left_hand:
         Number(
@@ -178,6 +213,10 @@ function useRealtimeLandmarks() {
     });
 
 
+    /* =========================
+       VISION
+    ========================= */
+
     setProcessingMs(
       Number(
         lastMessage
@@ -193,6 +232,10 @@ function useRealtimeLandmarks() {
       ),
     );
 
+
+    /* =========================
+       SEQUENCE
+    ========================= */
 
     const nextSequence =
       lastMessage.sequence;
@@ -271,11 +314,88 @@ function useRealtimeLandmarks() {
       });
     }
 
+
+    /* =========================
+       PREDICTION
+    ========================= */
+
+    const nextPrediction =
+      lastMessage.prediction;
+
+
+    if (nextPrediction) {
+      setPrediction({
+        status:
+          nextPrediction
+            .status ??
+          "idle",
+
+        label:
+          nextPrediction
+            .label ??
+          null,
+
+        classId:
+          nextPrediction
+            .class_id ??
+          null,
+
+        confidence:
+          Number(
+            nextPrediction
+              .confidence ?? 0,
+          ),
+
+        confidencePercent:
+          Number(
+            nextPrediction
+              .confidence_percent ??
+            0,
+          ),
+
+        inferenceMs:
+          nextPrediction
+            .inference_ms === null
+            ||
+            nextPrediction
+              .inference_ms ===
+              undefined
+              ? null
+              : Number(
+                  nextPrediction
+                    .inference_ms
+                ),
+
+        handPresentFrames:
+          Number(
+            nextPrediction
+              .hand_present_frames ??
+            0,
+          ),
+
+        top3:
+          Array.isArray(
+            nextPrediction.top3
+          )
+            ? nextPrediction.top3
+            : [],
+      });
+    }
+
+
+    else if (
+      !nextSequence?.ready
+    ) {
+      setPrediction(
+        EMPTY_PREDICTION,
+      );
+    }
+
   }, [lastMessage]);
 
 
   /* =========================
-     RESET MESSAGE
+     RESET
   ========================= */
 
   useEffect(() => {
@@ -286,8 +406,14 @@ function useRealtimeLandmarks() {
       return;
     }
 
+
     setSequence(
       EMPTY_SEQUENCE,
+    );
+
+
+    setPrediction(
+      EMPTY_PREDICTION,
     );
 
   }, [lastMessage]);
@@ -302,20 +428,29 @@ function useRealtimeLandmarks() {
       return;
     }
 
+
     setLandmarks(
       EMPTY_LANDMARKS,
     );
+
 
     setCounts(
       EMPTY_COUNTS,
     );
 
+
     setProcessingMs(null);
 
     setLastFrameId(null);
 
+
     setSequence(
       EMPTY_SEQUENCE,
+    );
+
+
+    setPrediction(
+      EMPTY_PREDICTION,
     );
 
   }, [isConnected]);
@@ -342,6 +477,30 @@ function useRealtimeLandmarks() {
 
     sequenceShapes:
       sequence.shapes,
+
+    predictionStatus:
+      prediction.status,
+
+    predictionLabel:
+      prediction.label,
+
+    predictionClassId:
+      prediction.classId,
+
+    predictionConfidence:
+      prediction.confidence,
+
+    predictionConfidencePercent:
+      prediction.confidencePercent,
+
+    predictionInferenceMs:
+      prediction.inferenceMs,
+
+    predictionHandPresentFrames:
+      prediction.handPresentFrames,
+
+    predictionTop3:
+      prediction.top3,
   };
 }
 
