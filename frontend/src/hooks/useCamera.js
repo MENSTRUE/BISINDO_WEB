@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -21,10 +22,10 @@ function useCamera() {
     useState("");
 
   /* =========================
-     STOP CAMERA
+     STOP STREAM INTERNAL
   ========================= */
 
-  const stopCamera = () => {
+  const stopStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current
         .getTracks()
@@ -38,17 +39,26 @@ function useCamera() {
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+  }, []);
+
+  /* =========================
+     STOP CAMERA
+  ========================= */
+
+  const stopCamera = useCallback(() => {
+    stopStream();
 
     setIsCameraActive(false);
     setCameraStatus("idle");
+    setCameraError("");
     setActiveCameraName("");
-  };
+  }, [stopStream]);
 
   /* =========================
      START CAMERA
   ========================= */
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     if (
       !navigator.mediaDevices ||
       !navigator.mediaDevices.getUserMedia
@@ -70,15 +80,7 @@ function useCamera() {
        * Pastikan stream lama benar-benar
        * dihentikan sebelum meminta kamera baru.
        */
-      if (streamRef.current) {
-        streamRef.current
-          .getTracks()
-          .forEach((track) => {
-            track.stop();
-          });
-
-        streamRef.current = null;
-      }
+      stopStream();
 
       /* =========================
          DETECT AVAILABLE CAMERAS
@@ -94,7 +96,7 @@ function useCamera() {
       );
 
       console.log(
-        "Available cameras:",
+        "[Camera] Available cameras:",
         cameras,
       );
 
@@ -105,15 +107,16 @@ function useCamera() {
         );
       }
 
-      /*
-       * Hindari virtual camera jika ada.
-       */
+      /* =========================
+         SELECT PHYSICAL CAMERA
+      ========================= */
+
       const physicalCamera =
         cameras.find((camera) => {
           const label =
             camera.label
-              .toLowerCase()
-              .trim();
+              ?.toLowerCase()
+              .trim() ?? "";
 
           return (
             !label.includes("obs") &&
@@ -124,54 +127,107 @@ function useCamera() {
         }) ?? cameras[0];
 
       console.log(
-        "Selected camera:",
+        "[Camera] Selected camera:",
         physicalCamera,
       );
 
       /* =========================
-         OPEN SELECTED CAMERA
+         OPEN CAMERA
       ========================= */
 
-      const stream =
-        await navigator.mediaDevices
-          .getUserMedia({
-            video: {
-              deviceId: {
-                exact:
-                  physicalCamera.deviceId,
+      let stream;
+
+      try {
+        /*
+         * Jangan pakai:
+         *
+         * deviceId: {
+         *   exact: ...
+         * }
+         *
+         * karena terlalu ketat dan bisa
+         * menghasilkan OverconstrainedError.
+         */
+        stream =
+          await navigator.mediaDevices
+            .getUserMedia({
+              video: {
+                deviceId:
+                  physicalCamera.deviceId
+                    ? {
+                        ideal:
+                          physicalCamera.deviceId,
+                      }
+                    : undefined,
+
+                width: {
+                  ideal: 1280,
+                },
+
+                height: {
+                  ideal: 720,
+                },
+
+                facingMode: {
+                  ideal: "user",
+                },
               },
 
-              width: {
-                ideal: 1280,
-              },
+              audio: false,
+            });
+      } catch (constraintError) {
+        /*
+         * Kalau browser menolak constraint,
+         * biarkan browser memilih konfigurasi
+         * kamera yang didukung.
+         */
+        if (
+          constraintError.name !==
+          "OverconstrainedError"
+        ) {
+          throw constraintError;
+        }
 
-              height: {
-                ideal: 720,
-              },
-            },
+        console.warn(
+          "[Camera] Constraint ideal gagal. " +
+          "Fallback ke video:true.",
+          constraintError,
+        );
 
-            audio: false,
-          });
+        stream =
+          await navigator.mediaDevices
+            .getUserMedia({
+              video: true,
+              audio: false,
+            });
+      }
 
       streamRef.current = stream;
 
       /* =========================
-         GET ACTUAL ACTIVE DEVICE
+         GET ACTIVE VIDEO TRACK
       ========================= */
 
       const videoTrack =
         stream.getVideoTracks()[0];
 
+      if (!videoTrack) {
+        throw new DOMException(
+          "Video track tidak tersedia.",
+          "NotFoundError",
+        );
+      }
+
       const settings =
-        videoTrack?.getSettings();
+        videoTrack.getSettings();
 
       const label =
-        videoTrack?.label ||
+        videoTrack.label ||
         physicalCamera.label ||
         "Camera";
 
       console.log(
-        "Camera started:",
+        "[Camera] Camera started:",
         {
           label,
           settings,
@@ -188,33 +244,30 @@ function useCamera() {
         videoRef.current.srcObject =
           stream;
 
-        await videoRef.current.play();
+        try {
+          await videoRef.current.play();
+        } catch (playError) {
+          console.warn(
+            "[Camera] video.play() warning:",
+            playError,
+          );
+        }
       }
+
+      /* =========================
+         CAMERA READY
+      ========================= */
 
       setIsCameraActive(true);
       setCameraStatus("active");
+      setCameraError("");
     } catch (error) {
       console.error(
-        "Camera access error:",
+        "[Camera] Access error:",
         error,
       );
 
-      /*
-       * Pastikan stream gagal tidak tertinggal.
-       */
-      if (streamRef.current) {
-        streamRef.current
-          .getTracks()
-          .forEach((track) => {
-            track.stop();
-          });
-
-        streamRef.current = null;
-      }
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
+      stopStream();
 
       setIsCameraActive(false);
       setCameraStatus("error");
@@ -230,41 +283,68 @@ function useCamera() {
         setCameraError(
           "Izin kamera ditolak. Izinkan kamera melalui pengaturan browser.",
         );
-      } else if (
+
+        return;
+      }
+
+      if (
         error.name === "NotFoundError"
       ) {
         setCameraError(
           "Kamera tidak ditemukan pada perangkat.",
         );
-      } else if (
+
+        return;
+      }
+
+      if (
         error.name === "NotReadableError"
       ) {
         setCameraError(
           "Kamera ditemukan, tetapi tidak dapat dibuka. Pastikan kamera tidak sedang digunakan aplikasi lain.",
         );
-      } else if (
-        error.name === "OverconstrainedError"
+
+        return;
+      }
+
+      if (
+        error.name ===
+        "OverconstrainedError"
       ) {
         setCameraError(
-          "Konfigurasi kamera tidak didukung oleh perangkat.",
+          "Browser tidak menemukan konfigurasi kamera yang sesuai.",
         );
-      } else if (
+
+        return;
+      }
+
+      if (
         error.name === "AbortError"
       ) {
         setCameraError(
           "Proses membuka kamera dibatalkan oleh perangkat.",
         );
-      } else {
-        setCameraError(
-          `Kamera tidak dapat diaktifkan${
-            error?.message
-              ? `: ${error.message}`
-              : "."
-          }`,
-        );
+
+        return;
       }
+
+      if (
+        error.name === "SecurityError"
+      ) {
+        setCameraError(
+          "Browser memblokir akses kamera karena kebijakan keamanan.",
+        );
+
+        return;
+      }
+
+      setCameraError(
+        error?.message
+          ? `Kamera tidak dapat diaktifkan: ${error.message}`
+          : "Kamera tidak dapat diaktifkan.",
+      );
     }
-  };
+  }, [stopStream]);
 
   /* =========================
      CLEANUP
@@ -272,17 +352,13 @@ function useCamera() {
 
   useEffect(() => {
     return () => {
-      if (streamRef.current) {
-        streamRef.current
-          .getTracks()
-          .forEach((track) => {
-            track.stop();
-          });
-
-        streamRef.current = null;
-      }
+      stopStream();
     };
-  }, []);
+  }, [stopStream]);
+
+  /* =========================
+     RETURN
+  ========================= */
 
   return {
     videoRef,
