@@ -14,11 +14,15 @@ import {
 } from "lucide-react";
 
 import useCamera from "../hooks/useCamera";
+
 import useBackendHealth from "../hooks/useBackendHealth";
+
+import useFrameStreamer from "../hooks/useFrameStreamer";
 
 import LandmarkCanvas from "../components/landmarks/LandmarkCanvas";
 
 import "../styles/recognition.css";
+
 
 const EMPTY_LANDMARKS = {
   leftHand: [],
@@ -26,6 +30,7 @@ const EMPTY_LANDMARKS = {
   pose: [],
   face: [],
 };
+
 
 function RecognitionPage() {
   /* =========================
@@ -41,6 +46,7 @@ function RecognitionPage() {
     stopCamera,
   } = useCamera();
 
+
   /* =========================
      BACKEND HEALTH
   ========================= */
@@ -50,13 +56,34 @@ function RecognitionPage() {
     isOnline: isBackendOnline,
   } = useBackendHealth();
 
+
+  /* =========================
+     FRAME STREAM
+  ========================= */
+
+  const {
+    isStreaming,
+    streamFps,
+    sentFrames,
+    receivedFrames,
+    lastFrameBytes,
+  } = useFrameStreamer({
+    videoRef,
+    isCameraActive,
+  });
+
+
   const BackendIcon =
     isBackendOnline
       ? Wifi
       : WifiOff;
 
+
   const getBackendStatusText = () => {
-    if (backendStatus === "checking") {
+    if (
+      backendStatus ===
+      "checking"
+    ) {
       return "Checking";
     }
 
@@ -65,45 +92,95 @@ function RecognitionPage() {
       : "Offline";
   };
 
+
   /* =========================
      LANDMARK DATA
   ========================= */
 
   /*
-   * Nanti object ini akan diganti
-   * dengan data asli dari WebSocket.
+   * Tahap #16 nanti diganti
+   * landmark asli dari backend.
    */
-  const landmarks = EMPTY_LANDMARKS;
+  const landmarks =
+    EMPTY_LANDMARKS;
+
 
   const totalHandLandmarks =
     landmarks.leftHand.length +
     landmarks.rightHand.length;
 
+
   const totalPoseLandmarks =
     landmarks.pose.length;
 
+
   const totalFaceLandmarks =
     landmarks.face.length;
+
 
   /* =========================
      CAMERA STATUS
   ========================= */
 
   const getCameraStatusText = () => {
-    if (cameraStatus === "requesting") {
+    if (
+      cameraStatus ===
+      "requesting"
+    ) {
       return "Meminta Izin";
     }
 
-    if (cameraStatus === "active") {
+    if (
+      cameraStatus ===
+      "active"
+    ) {
       return "Camera On";
     }
 
-    if (cameraStatus === "error") {
+    if (
+      cameraStatus ===
+      "error"
+    ) {
       return "Camera Error";
     }
 
     return "Camera Off";
   };
+
+
+  /* =========================
+     CAMERA INFO
+  ========================= */
+
+  const getCameraInfoText = () => {
+    if (!isCameraActive) {
+      return "Kamera belum aktif.";
+    }
+
+    if (
+      isCameraActive &&
+      !isBackendOnline
+    ) {
+      return (
+        "Kamera aktif · " +
+        "backend offline."
+      );
+    }
+
+    if (!isStreaming) {
+      return (
+        "Kamera aktif · " +
+        "menunggu WebSocket."
+      );
+    }
+
+    return (
+      `Streaming ${streamFps} FPS · ` +
+      `Sent ${sentFrames} · ` +
+      `Backend ${receivedFrames}`
+    );
+  };
+
 
   return (
     <div className="recognition-page">
@@ -131,9 +208,12 @@ function RecognitionPage() {
         <div className="recognition-heading-status">
           <span className="heading-status-dot" />
 
-          Frontend Ready
+          {isStreaming
+            ? "Frame Streaming"
+            : "Frontend Ready"}
         </div>
       </section>
+
 
       {/* =========================
           MAIN WORKSPACE
@@ -161,7 +241,8 @@ function RecognitionPage() {
                 className={`camera-status-dot ${
                   isCameraActive
                     ? "online"
-                    : cameraStatus === "error"
+                    : cameraStatus ===
+                        "error"
                       ? "error"
                       : "offline"
                 }`}
@@ -170,6 +251,7 @@ function RecognitionPage() {
               {getCameraStatusText()}
             </div>
           </div>
+
 
           {/* =========================
               CAMERA PREVIEW
@@ -188,6 +270,7 @@ function RecognitionPage() {
               muted
             />
 
+
             {/* LANDMARK CANVAS */}
 
             {isCameraActive && (
@@ -196,6 +279,7 @@ function RecognitionPage() {
                 mirrored
               />
             )}
+
 
             {/* CAMERA CORNERS */}
 
@@ -206,6 +290,7 @@ function RecognitionPage() {
             <div className="camera-corner bottom-left" />
 
             <div className="camera-corner bottom-right" />
+
 
             {/* CAMERA PLACEHOLDER */}
 
@@ -218,7 +303,8 @@ function RecognitionPage() {
                   />
                 </div>
 
-                {cameraStatus === "requesting" ? (
+                {cameraStatus ===
+                "requesting" ? (
                   <>
                     <strong>
                       Meminta izin kamera...
@@ -254,6 +340,7 @@ function RecognitionPage() {
               </div>
             )}
 
+
             {/* OVERLAY LABEL */}
 
             <div className="camera-overlay-badge">
@@ -265,15 +352,19 @@ function RecognitionPage() {
               Landmark Overlay
             </div>
 
+
             {/* LIVE STATUS */}
 
             {isCameraActive && (
               <div className="camera-live-badge">
                 <span />
 
-                LIVE
+                {isStreaming
+                  ? "STREAMING"
+                  : "LIVE"}
               </div>
             )}
+
 
             {/* LANDMARK STATUS */}
 
@@ -312,6 +403,7 @@ function RecognitionPage() {
             )}
           </div>
 
+
           {/* =========================
               CAMERA CONTROLS
           ========================== */}
@@ -323,7 +415,8 @@ function RecognitionPage() {
               onClick={startCamera}
               disabled={
                 isCameraActive ||
-                cameraStatus === "requesting"
+                cameraStatus ===
+                  "requesting"
               }
             >
               <Play
@@ -331,7 +424,8 @@ function RecognitionPage() {
                 strokeWidth={1.9}
               />
 
-              {cameraStatus === "requesting"
+              {cameraStatus ===
+              "requesting"
                 ? "Meminta Izin..."
                 : "Mulai Kamera"}
             </button>
@@ -351,12 +445,11 @@ function RecognitionPage() {
             </button>
 
             <div className="camera-control-info">
-              {isCameraActive
-                ? "Kamera aktif."
-                : "Kamera belum aktif."}
+              {getCameraInfoText()}
             </div>
           </div>
         </div>
+
 
         {/* =========================
             RESULT PANEL
@@ -379,6 +472,7 @@ function RecognitionPage() {
               strokeWidth={1.7}
             />
           </div>
+
 
           {/* =========================
               CURRENT PREDICTION
@@ -403,13 +497,16 @@ function RecognitionPage() {
             </strong>
 
             <span className="prediction-subtitle">
-              {isCameraActive
-                ? isBackendOnline
-                  ? "Kamera dan backend aktif. Inference belum dimulai."
-                  : "Kamera aktif, tetapi backend belum terhubung."
-                : "Belum ada gerakan yang diproses."}
+              {!isCameraActive
+                ? "Belum ada gerakan yang diproses."
+                : isStreaming
+                  ? "Frame kamera sedang dikirim ke backend."
+                  : isBackendOnline
+                    ? "Kamera aktif, menunggu koneksi real-time."
+                    : "Kamera aktif, tetapi backend belum terhubung."}
             </span>
           </div>
+
 
           {/* =========================
               METRICS
@@ -437,6 +534,7 @@ function RecognitionPage() {
               </div>
             </div>
 
+
             {/* SEQUENCE */}
 
             <div className="prediction-metric">
@@ -457,6 +555,7 @@ function RecognitionPage() {
                 </strong>
               </div>
             </div>
+
 
             {/* BACKEND */}
 
@@ -481,6 +580,7 @@ function RecognitionPage() {
               </div>
             </div>
           </div>
+
 
           {/* =========================
               MODEL INFO
@@ -507,13 +607,14 @@ function RecognitionPage() {
             </p>
           </div>
 
+
           {/* =========================
-              BACKEND INFO
+              STREAM INFO
           ========================== */}
 
           <div
             className={`recognition-warning ${
-              isBackendOnline
+              isStreaming
                 ? "backend-connected"
                 : ""
             }`}
@@ -524,15 +625,25 @@ function RecognitionPage() {
             />
 
             <p>
-              {backendStatus === "checking"
-                ? "Sedang memeriksa koneksi backend FastAPI..."
-                : isBackendOnline
-                  ? "Backend FastAPI terhubung. Inference real-time belum diaktifkan."
-                  : "Backend tidak terhubung. Jalankan server FastAPI terlebih dahulu."}
+              {isStreaming
+                ? (
+                    `Frame kamera sudah dikirim ` +
+                    `ke backend (${sentFrames} sent, ` +
+                    `${receivedFrames} diterima, ` +
+                    `${lastFrameBytes} byte frame terakhir). ` +
+                    `Ekstraksi landmark belum diaktifkan.`
+                  )
+                : backendStatus ===
+                    "checking"
+                  ? "Sedang memeriksa koneksi backend FastAPI..."
+                  : isBackendOnline
+                    ? "Backend FastAPI terhubung. Aktifkan kamera untuk mulai mengirim frame."
+                    : "Backend tidak terhubung. Jalankan server FastAPI terlebih dahulu."}
             </p>
           </div>
         </aside>
       </section>
+
 
       {/* =========================
           TRANSCRIPT
@@ -575,5 +686,6 @@ function RecognitionPage() {
     </div>
   );
 }
+
 
 export default RecognitionPage;
