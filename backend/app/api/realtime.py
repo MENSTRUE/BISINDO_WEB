@@ -1,10 +1,17 @@
 import base64
-from datetime import datetime, timezone
+from datetime import (
+    datetime,
+    timezone,
+)
 
 from fastapi import (
     APIRouter,
     WebSocket,
     WebSocketDisconnect,
+)
+
+from app.services.landmark_extractor import (
+    LandmarkExtractor,
 )
 
 
@@ -14,7 +21,10 @@ router = APIRouter(
 
 
 FRAME_ACK_INTERVAL = 5
-MAX_FRAME_BYTES = 2_000_000
+
+MAX_FRAME_BYTES = (
+    2_000_000
+)
 
 
 def utc_now():
@@ -22,6 +32,10 @@ def utc_now():
         timezone.utc,
     ).isoformat()
 
+
+# =========================
+# BASE64
+# =========================
 
 def decode_frame_base64(
     image_base64: str,
@@ -31,6 +45,7 @@ def decode_frame_base64(
             "Frame kosong."
         )
 
+
     try:
         frame_bytes = (
             base64.b64decode(
@@ -38,15 +53,18 @@ def decode_frame_base64(
                 validate=True,
             )
         )
+
     except Exception as error:
         raise ValueError(
             "Frame bukan Base64 valid."
         ) from error
 
+
     if not frame_bytes:
         raise ValueError(
             "Frame hasil decode kosong."
         )
+
 
     if (
         len(frame_bytes) >
@@ -56,8 +74,13 @@ def decode_frame_base64(
             "Ukuran frame terlalu besar."
         )
 
+
     return frame_bytes
 
+
+# =========================
+# WEBSOCKET
+# =========================
 
 @router.websocket(
     "/ws/realtime"
@@ -67,19 +90,36 @@ async def realtime_websocket(
 ):
     await websocket.accept()
 
+
     frame_count = 0
+
+
+    extractor = (
+        LandmarkExtractor()
+    )
+
 
     await websocket.send_json(
         {
-            "type": "connection",
-            "status": "connected",
+            "type":
+                "connection",
+
+            "status":
+                "connected",
+
             "message": (
                 "BISINDO realtime "
                 "channel ready."
             ),
-            "server_time": utc_now(),
+
+            "vision":
+                "ready",
+
+            "server_time":
+                utc_now(),
         }
     )
+
 
     try:
         while True:
@@ -88,12 +128,14 @@ async def realtime_websocket(
                 .receive_json()
             )
 
+
             message_type = (
                 message.get(
                     "type",
                     "unknown",
                 )
             )
+
 
             # =========================
             # PING
@@ -105,8 +147,12 @@ async def realtime_websocket(
             ):
                 await websocket.send_json(
                     {
-                        "type": "pong",
-                        "status": "ok",
+                        "type":
+                            "pong",
+
+                        "status":
+                            "ok",
+
                         "server_time":
                             utc_now(),
                     }
@@ -114,8 +160,9 @@ async def realtime_websocket(
 
                 continue
 
+
             # =========================
-            # CLIENT HELLO
+            # HELLO
             # =========================
 
             if (
@@ -135,6 +182,9 @@ async def realtime_websocket(
                             "connected."
                         ),
 
+                        "vision":
+                            "ready",
+
                         "server_time":
                             utc_now(),
                     }
@@ -142,8 +192,9 @@ async def realtime_websocket(
 
                 continue
 
+
             # =========================
-            # CAMERA FRAME
+            # FRAME
             # =========================
 
             if (
@@ -151,12 +202,13 @@ async def realtime_websocket(
                 "frame"
             ):
                 try:
-                    frame_id = (
+                    frame_id = int(
                         message.get(
                             "frame_id",
                             frame_count + 1,
                         )
                     )
+
 
                     width = int(
                         message.get(
@@ -165,12 +217,14 @@ async def realtime_websocket(
                         )
                     )
 
+
                     height = int(
                         message.get(
                             "height",
                             0,
                         )
                     )
+
 
                     image_base64 = (
                         message.get(
@@ -179,29 +233,68 @@ async def realtime_websocket(
                         )
                     )
 
+
                     frame_bytes = (
                         decode_frame_base64(
-                            image_base64,
+                            image_base64
                         )
                     )
 
+
+                    # =========================
+                    # LANDMARK EXTRACTION
+                    # =========================
+
+                    result = (
+                        extractor.extract(
+                            frame_bytes
+                        )
+                    )
+
+
                     frame_count += 1
 
-                    # Log jangan tiap frame
-                    # supaya terminal tidak banjir.
-                    if (
-                        frame_count % 25 ==
-                        0
-                    ):
-                        print(
-                            "[Frame] "
-                            f"received={frame_count} "
-                            f"id={frame_id} "
-                            f"size={width}x{height} "
-                            f"bytes={len(frame_bytes)}"
-                        )
 
-                    # Kirim ACK setiap 5 frame.
+                    # =========================
+                    # SEND LANDMARKS
+                    # =========================
+
+                    await websocket.send_json(
+                        {
+                            "type":
+                                "landmarks",
+
+                            "status":
+                                "ok",
+
+                            "frame_id":
+                                frame_id,
+
+                            "landmarks":
+                                result[
+                                    "landmarks"
+                                ],
+
+                            "counts":
+                                result[
+                                    "counts"
+                                ],
+
+                            "processing_ms":
+                                result[
+                                    "processing_ms"
+                                ],
+
+                            "server_time":
+                                utc_now(),
+                        }
+                    )
+
+
+                    # =========================
+                    # FRAME ACK
+                    # =========================
+
                     if (
                         frame_count %
                         FRAME_ACK_INTERVAL ==
@@ -237,6 +330,39 @@ async def realtime_websocket(
                             }
                         )
 
+
+                    # =========================
+                    # TERMINAL LOG
+                    # =========================
+
+                    if (
+                        frame_count %
+                        25 ==
+                        0
+                    ):
+                        counts = (
+                            result[
+                                "counts"
+                            ]
+                        )
+
+
+                        print(
+                            "[Vision] "
+                            f"frame={frame_count} "
+                            f"handL="
+                            f"{counts['left_hand']} "
+                            f"handR="
+                            f"{counts['right_hand']} "
+                            f"body="
+                            f"{counts['pose']} "
+                            f"face="
+                            f"{counts['face']} "
+                            f"time="
+                            f"{result['processing_ms']}ms"
+                        )
+
+
                 except ValueError as error:
                     await websocket.send_json(
                         {
@@ -254,16 +380,46 @@ async def realtime_websocket(
                         }
                     )
 
+
+                except Exception as error:
+                    print(
+                        "[Vision] "
+                        "Frame processing error:",
+                        error,
+                    )
+
+
+                    await websocket.send_json(
+                        {
+                            "type":
+                                "vision_error",
+
+                            "status":
+                                "error",
+
+                            "message":
+                                str(error),
+
+                            "server_time":
+                                utc_now(),
+                        }
+                    )
+
+
                 continue
 
+
             # =========================
-            # GENERIC ACK
+            # GENERIC
             # =========================
 
             await websocket.send_json(
                 {
-                    "type": "ack",
-                    "status": "ok",
+                    "type":
+                        "ack",
+
+                    "status":
+                        "ok",
 
                     "received_type":
                         message_type,
@@ -273,6 +429,7 @@ async def realtime_websocket(
                 }
             )
 
+
     except WebSocketDisconnect:
         print(
             "[WebSocket] "
@@ -280,11 +437,17 @@ async def realtime_websocket(
             f"after {frame_count} frames."
         )
 
+
     except Exception as error:
         print(
             "[WebSocket] Error:",
             error,
         )
+
+
+    finally:
+        extractor.close()
+
 
         try:
             await websocket.close()

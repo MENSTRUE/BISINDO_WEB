@@ -14,22 +14,13 @@ import {
 } from "lucide-react";
 
 import useCamera from "../hooks/useCamera";
-
 import useBackendHealth from "../hooks/useBackendHealth";
-
 import useFrameStreamer from "../hooks/useFrameStreamer";
+import useRealtimeLandmarks from "../hooks/useRealtimeLandmarks";
 
 import LandmarkCanvas from "../components/landmarks/LandmarkCanvas";
 
 import "../styles/recognition.css";
-
-
-const EMPTY_LANDMARKS = {
-  leftHand: [],
-  rightHand: [],
-  pose: [],
-  face: [],
-};
 
 
 function RecognitionPage() {
@@ -73,6 +64,21 @@ function RecognitionPage() {
   });
 
 
+  /* =========================
+     REALTIME LANDMARKS
+  ========================= */
+
+  const {
+    landmarks,
+    processingMs,
+    lastFrameId,
+  } = useRealtimeLandmarks();
+
+
+  /* =========================
+     BACKEND STATUS
+  ========================= */
+
   const BackendIcon =
     isBackendOnline
       ? Wifi
@@ -94,16 +100,8 @@ function RecognitionPage() {
 
 
   /* =========================
-     LANDMARK DATA
+     LANDMARK COUNTS
   ========================= */
-
-  /*
-   * Tahap #16 nanti diganti
-   * landmark asli dari backend.
-   */
-  const landmarks =
-    EMPTY_LANDMARKS;
-
 
   const totalHandLandmarks =
     landmarks.leftHand.length +
@@ -182,6 +180,14 @@ function RecognitionPage() {
   };
 
 
+  /* =========================
+     VISION STATUS
+  ========================= */
+
+  const hasVisionData =
+    lastFrameId !== null;
+
+
   return (
     <div className="recognition-page">
       {/* =========================
@@ -208,9 +214,11 @@ function RecognitionPage() {
         <div className="recognition-heading-status">
           <span className="heading-status-dot" />
 
-          {isStreaming
-            ? "Frame Streaming"
-            : "Frontend Ready"}
+          {hasVisionData
+            ? "Vision Active"
+            : isStreaming
+              ? "Frame Streaming"
+              : "Frontend Ready"}
         </div>
       </section>
 
@@ -359,9 +367,11 @@ function RecognitionPage() {
               <div className="camera-live-badge">
                 <span />
 
-                {isStreaming
-                  ? "STREAMING"
-                  : "LIVE"}
+                {hasVisionData
+                  ? "VISION"
+                  : isStreaming
+                    ? "STREAMING"
+                    : "LIVE"}
               </div>
             )}
 
@@ -499,11 +509,13 @@ function RecognitionPage() {
             <span className="prediction-subtitle">
               {!isCameraActive
                 ? "Belum ada gerakan yang diproses."
-                : isStreaming
-                  ? "Frame kamera sedang dikirim ke backend."
-                  : isBackendOnline
-                    ? "Kamera aktif, menunggu koneksi real-time."
-                    : "Kamera aktif, tetapi backend belum terhubung."}
+                : hasVisionData
+                  ? "Landmark real-time berhasil diekstrak. Model klasifikasi belum diaktifkan."
+                  : isStreaming
+                    ? "Frame kamera sedang diproses oleh backend."
+                    : isBackendOnline
+                      ? "Kamera aktif, menunggu koneksi real-time."
+                      : "Kamera aktif, tetapi backend belum terhubung."}
             </span>
           </div>
 
@@ -609,12 +621,12 @@ function RecognitionPage() {
 
 
           {/* =========================
-              STREAM INFO
+              STREAM / VISION INFO
           ========================== */}
 
           <div
             className={`recognition-warning ${
-              isStreaming
+              hasVisionData
                 ? "backend-connected"
                 : ""
             }`}
@@ -625,20 +637,29 @@ function RecognitionPage() {
             />
 
             <p>
-              {isStreaming
+              {hasVisionData
                 ? (
-                    `Frame kamera sudah dikirim ` +
-                    `ke backend (${sentFrames} sent, ` +
-                    `${receivedFrames} diterima, ` +
-                    `${lastFrameBytes} byte frame terakhir). ` +
-                    `Ekstraksi landmark belum diaktifkan.`
+                    `Vision backend aktif · ` +
+                    `frame ${lastFrameId} · ` +
+                    `Hand ${totalHandLandmarks} · ` +
+                    `Body ${totalPoseLandmarks} · ` +
+                    `Face ${totalFaceLandmarks} · ` +
+                    `${processingMs ?? "--"} ms.`
                   )
-                : backendStatus ===
-                    "checking"
-                  ? "Sedang memeriksa koneksi backend FastAPI..."
-                  : isBackendOnline
-                    ? "Backend FastAPI terhubung. Aktifkan kamera untuk mulai mengirim frame."
-                    : "Backend tidak terhubung. Jalankan server FastAPI terlebih dahulu."}
+                : isStreaming
+                  ? (
+                      `Frame kamera sudah dikirim ` +
+                      `ke backend (${sentFrames} sent, ` +
+                      `${receivedFrames} diterima, ` +
+                      `${lastFrameBytes} byte frame terakhir). ` +
+                      `Menunggu hasil ekstraksi landmark.`
+                    )
+                  : backendStatus ===
+                      "checking"
+                    ? "Sedang memeriksa koneksi backend FastAPI..."
+                    : isBackendOnline
+                      ? "Backend FastAPI terhubung. Aktifkan kamera untuk mulai memproses landmark."
+                      : "Backend tidak terhubung. Jalankan server FastAPI terlebih dahulu."}
             </p>
           </div>
         </aside>
