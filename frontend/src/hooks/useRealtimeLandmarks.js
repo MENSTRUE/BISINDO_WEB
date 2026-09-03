@@ -42,19 +42,48 @@ const EMPTY_SEQUENCE = {
 const EMPTY_PREDICTION = {
   status: "idle",
 
-  label: null,
+  accepted: false,
 
+  label: null,
   classId: null,
 
   confidence: 0,
-
   confidencePercent: 0,
+
+  margin: 0,
+  marginPercent: 0,
+
+  votes: 0,
+  requiredVotes: 3,
+  windowSize: 0,
+  voteWindow: 5,
+
+  rawStatus: "idle",
+  rawLabel: null,
+  rawClassId: null,
+
+  rawConfidence: 0,
+  rawConfidencePercent: 0,
+
+  rawMargin: 0,
+  rawMarginPercent: 0,
+
+  candidateValid: false,
+
+  reason: "idle",
 
   inferenceMs: null,
 
   handPresentFrames: 0,
 
   top3: [],
+
+  thresholds: {
+    minConfidencePercent: 70,
+    minMarginPercent: 10,
+    minVotes: 3,
+    voteWindow: 5,
+  },
 };
 
 
@@ -316,7 +345,7 @@ function useRealtimeLandmarks() {
 
 
     /* =========================
-       PREDICTION
+       STABILIZED PREDICTION
     ========================= */
 
     const nextPrediction =
@@ -329,6 +358,11 @@ function useRealtimeLandmarks() {
           nextPrediction
             .status ??
           "idle",
+
+        accepted:
+          Boolean(
+            nextPrediction.accepted
+          ),
 
         label:
           nextPrediction
@@ -352,6 +386,94 @@ function useRealtimeLandmarks() {
               .confidence_percent ??
             0,
           ),
+
+        margin:
+          Number(
+            nextPrediction
+              .margin ?? 0,
+          ),
+
+        marginPercent:
+          Number(
+            nextPrediction
+              .margin_percent ?? 0,
+          ),
+
+        votes:
+          Number(
+            nextPrediction
+              .votes ?? 0,
+          ),
+
+        requiredVotes:
+          Number(
+            nextPrediction
+              .required_votes ?? 3,
+          ),
+
+        windowSize:
+          Number(
+            nextPrediction
+              .window_size ?? 0,
+          ),
+
+        voteWindow:
+          Number(
+            nextPrediction
+              .vote_window ?? 5,
+          ),
+
+        rawStatus:
+          nextPrediction
+            .raw_status ??
+          "idle",
+
+        rawLabel:
+          nextPrediction
+            .raw_label ??
+          null,
+
+        rawClassId:
+          nextPrediction
+            .raw_class_id ??
+          null,
+
+        rawConfidence:
+          Number(
+            nextPrediction
+              .raw_confidence ?? 0,
+          ),
+
+        rawConfidencePercent:
+          Number(
+            nextPrediction
+              .raw_confidence_percent ??
+            0,
+          ),
+
+        rawMargin:
+          Number(
+            nextPrediction
+              .raw_margin ?? 0,
+          ),
+
+        rawMarginPercent:
+          Number(
+            nextPrediction
+              .raw_margin_percent ??
+            0,
+          ),
+
+        candidateValid:
+          Boolean(
+            nextPrediction
+              .candidate_valid
+          ),
+
+        reason:
+          nextPrediction
+            .reason ??
+          "idle",
 
         inferenceMs:
           nextPrediction
@@ -379,6 +501,40 @@ function useRealtimeLandmarks() {
           )
             ? nextPrediction.top3
             : [],
+
+        thresholds: {
+          minConfidencePercent:
+            Number(
+              nextPrediction
+                .thresholds
+                ?.min_confidence_percent ??
+              70,
+            ),
+
+          minMarginPercent:
+            Number(
+              nextPrediction
+                .thresholds
+                ?.min_margin_percent ??
+              10,
+            ),
+
+          minVotes:
+            Number(
+              nextPrediction
+                .thresholds
+                ?.min_votes ??
+              3,
+            ),
+
+          voteWindow:
+            Number(
+              nextPrediction
+                .thresholds
+                ?.vote_window ??
+              5,
+            ),
+        },
       });
     }
 
@@ -481,6 +637,9 @@ function useRealtimeLandmarks() {
     predictionStatus:
       prediction.status,
 
+    predictionAccepted:
+      prediction.accepted,
+
     predictionLabel:
       prediction.label,
 
@@ -493,6 +652,48 @@ function useRealtimeLandmarks() {
     predictionConfidencePercent:
       prediction.confidencePercent,
 
+    predictionMarginPercent:
+      prediction.marginPercent,
+
+    predictionVotes:
+      prediction.votes,
+
+    predictionRequiredVotes:
+      prediction.requiredVotes,
+
+    predictionWindowSize:
+      prediction.windowSize,
+
+    predictionVoteWindow:
+      prediction.voteWindow,
+
+    predictionRawStatus:
+      prediction.rawStatus,
+
+    predictionRawLabel:
+      prediction.rawLabel,
+
+    predictionRawClassId:
+      prediction.rawClassId,
+
+    predictionRawConfidence:
+      prediction.rawConfidence,
+
+    predictionRawConfidencePercent:
+      prediction.rawConfidencePercent,
+
+    predictionRawMargin:
+      prediction.rawMargin,
+
+    predictionRawMarginPercent:
+      prediction.rawMarginPercent,
+
+    predictionCandidateValid:
+      prediction.candidateValid,
+
+    predictionReason:
+      prediction.reason,
+
     predictionInferenceMs:
       prediction.inferenceMs,
 
@@ -501,6 +702,9 @@ function useRealtimeLandmarks() {
 
     predictionTop3:
       prediction.top3,
+
+    predictionThresholds:
+      prediction.thresholds,
   };
 }
 

@@ -18,6 +18,10 @@ from app.inference.predictor import (
     bisindo_predictor,
 )
 
+from app.inference.stabilizer import (
+    PredictionStabilizer,
+)
+
 from app.services.landmark_extractor import (
     LandmarkExtractor,
 )
@@ -124,8 +128,13 @@ async def realtime_websocket(
     )
 
 
+    stabilizer = (
+        PredictionStabilizer()
+    )
+
+
     # ========================================================
-    # CONNECTION READY
+    # CONNECTION
     # ========================================================
 
     await websocket.send_json(
@@ -246,7 +255,7 @@ async def realtime_websocket(
 
 
             # =================================================
-            # RESET SEQUENCE
+            # RESET
             # =================================================
 
             if (
@@ -254,6 +263,8 @@ async def realtime_websocket(
                 == "reset_sequence"
             ):
                 sequence_builder.reset()
+
+                stabilizer.reset()
 
                 frame_count = 0
 
@@ -313,6 +324,7 @@ async def realtime_websocket(
                     if (
                         last_client_frame_id
                         is not None
+
                         and frame_id
                         <= last_client_frame_id
                     ):
@@ -320,7 +332,11 @@ async def realtime_websocket(
 
                         sequence_builder.reset()
 
-                        last_prediction = None
+                        stabilizer.reset()
+
+                        last_prediction = (
+                            None
+                        )
 
 
                     last_client_frame_id = (
@@ -389,7 +405,31 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # REAL INFERENCE
+                    # CURRENT HAND
+                    # =========================================
+
+                    counts = (
+                        result[
+                            "counts"
+                        ]
+                    )
+
+
+                    current_hand_detected = (
+                        counts[
+                            "left_hand"
+                        ]
+                        > 0
+
+                        or counts[
+                            "right_hand"
+                        ]
+                        > 0
+                    )
+
+
+                    # =========================================
+                    # RAW INFERENCE + STABILIZATION
                     # =========================================
 
                     if (
@@ -400,6 +440,7 @@ async def realtime_websocket(
                         should_infer = (
                             last_prediction
                             is None
+
                             or frame_count
                             % INFERENCE_EVERY_N_FRAMES
                             == 0
@@ -417,17 +458,30 @@ async def realtime_websocket(
                                 ready_sequences
                                 is not None
                             ):
-                                last_prediction = (
+                                raw_prediction = (
                                     bisindo_predictor
                                     .predict(
                                         ready_sequences
                                     )
                                 )
 
+
+                                last_prediction = (
+                                    stabilizer.update(
+                                        raw_prediction,
+                                        current_hand_detected=(
+                                            current_hand_detected
+                                        ),
+                                    )
+                                )
+
+
                     else:
                         last_prediction = (
                             None
                         )
+
+                        stabilizer.reset()
 
 
                     # =========================================
@@ -451,9 +505,7 @@ async def realtime_websocket(
                                 ],
 
                             "counts":
-                                result[
-                                    "counts"
-                                ],
+                                counts,
 
                             "processing_ms":
                                 result[
@@ -476,7 +528,7 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # FRAME ACK
+                    # ACK
                     # =========================================
 
                     if (
@@ -524,27 +576,6 @@ async def realtime_websocket(
                         % 10
                         == 0
                     ):
-                        counts = (
-                            result[
-                                "counts"
-                            ]
-                        )
-
-
-                        seq_count = (
-                            sequence_status[
-                                "count"
-                            ]
-                        )
-
-
-                        seq_ready = (
-                            sequence_status[
-                                "ready"
-                            ]
-                        )
-
-
                         prediction_text = (
                             "-"
                         )
@@ -552,48 +583,107 @@ async def realtime_websocket(
 
                         if (
                             last_prediction
-                            and last_prediction
-                            .get(
-                                "status"
-                            )
-                            == "ok"
+                            is not None
                         ):
-                            prediction_text = (
-                                (
-                                    f"{last_prediction['label']} "
-                                    f"{last_prediction['confidence_percent']:.1f}% "
-                                    f"{last_prediction['inference_ms']}ms"
+                            pred_status = (
+                                last_prediction.get(
+                                    "status",
+                                    "idle",
                                 )
                             )
 
 
-                        elif (
-                            last_prediction
-                            and last_prediction
-                            .get(
-                                "status"
+                            raw_label = (
+                                last_prediction.get(
+                                    "raw_label"
+                                )
+                                or "-"
                             )
-                            == "waiting_for_hand"
-                        ):
+
+
+                            raw_conf = float(
+                                last_prediction.get(
+                                    "raw_confidence_percent",
+                                    0.0,
+                                )
+                                or 0.0
+                            )
+
+
+                            raw_margin = float(
+                                last_prediction.get(
+                                    "raw_margin_percent",
+                                    0.0,
+                                )
+                                or 0.0
+                            )
+
+
+                            stable_label = (
+                                last_prediction.get(
+                                    "label"
+                                )
+                                or "-"
+                            )
+
+
+                            stable_conf = float(
+                                last_prediction.get(
+                                    "confidence_percent",
+                                    0.0,
+                                )
+                                or 0.0
+                            )
+
+
+                            votes = int(
+                                last_prediction.get(
+                                    "votes",
+                                    0,
+                                )
+                                or 0
+                            )
+
+
+                            required_votes = int(
+                                last_prediction.get(
+                                    "required_votes",
+                                    3,
+                                )
+                                or 3
+                            )
+
+
                             prediction_text = (
-                                "waiting_hand"
+                                f"raw={raw_label} "
+                                f"{raw_conf:.1f}% "
+                                f"margin={raw_margin:.1f}% "
+                                f"stable={stable_label} "
+                                f"{stable_conf:.1f}% "
+                                f"vote={votes}/{required_votes} "
+                                f"status={pred_status}"
                             )
 
 
                         print(
                             "[Realtime] "
                             f"frame={frame_count} "
-                            f"seq={seq_count}/48 "
-                            f"ready={seq_ready} "
-                            f"handL={counts['left_hand']} "
-                            f"handR={counts['right_hand']} "
-                            f"body={counts['pose']} "
-                            f"face={counts['face']} "
+                            f"seq="
+                            f"{sequence_status['count']}/48 "
+                            f"ready="
+                            f"{sequence_status['ready']} "
+                            f"handL="
+                            f"{counts['left_hand']} "
+                            f"handR="
+                            f"{counts['right_hand']} "
+                            f"body="
+                            f"{counts['pose']} "
+                            f"face="
+                            f"{counts['face']} "
                             f"vision="
                             f"{result['processing_ms']}ms "
                             f"prep="
                             f"{sequence_status['preprocessing_ms']}ms "
-                            f"pred="
                             f"{prediction_text}"
                         )
 
@@ -682,6 +772,8 @@ async def realtime_websocket(
 
     finally:
         sequence_builder.reset()
+
+        stabilizer.reset()
 
         extractor.close()
 

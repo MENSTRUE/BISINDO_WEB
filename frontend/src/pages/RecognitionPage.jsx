@@ -65,7 +65,7 @@ function RecognitionPage() {
 
 
   /* =========================
-     VISION + SEQUENCE + AI
+     VISION + AI
   ========================= */
 
   const {
@@ -81,26 +81,91 @@ function RecognitionPage() {
     sequenceShapes,
 
     predictionStatus,
+    predictionAccepted,
+
     predictionLabel,
     predictionClassId,
+
     predictionConfidencePercent,
+    predictionMarginPercent,
+
+    predictionVotes,
+    predictionRequiredVotes,
+    predictionVoteWindow,
+
+    predictionRawLabel,
+    predictionRawConfidencePercent,
+    predictionRawMarginPercent,
+
+    predictionCandidateValid,
+    predictionReason,
+
     predictionInferenceMs,
     predictionHandPresentFrames,
+
     predictionTop3,
+    predictionThresholds,
   } = useRealtimeLandmarks();
 
 
   /* =========================
-     BACKEND STATUS
+     LANDMARK COUNTS
   ========================= */
 
+  const totalHandLandmarks =
+    landmarks.leftHand.length +
+    landmarks.rightHand.length;
+
+
+  const totalPoseLandmarks =
+    landmarks.pose.length;
+
+
+  const totalFaceLandmarks =
+    landmarks.face.length;
+
+
+  const hasVisionData =
+    isCameraActive &&
+    lastFrameId !== null;
+
+
+  const displaySequenceCount =
+    isCameraActive
+      ? sequenceCount
+      : 0;
+
+
+  /* =========================
+     EFFECTIVE BACKEND STATUS
+  ========================= */
+
+  const effectiveBackendOnline =
+    isBackendOnline ||
+    isStreaming ||
+    receivedFrames > 0 ||
+    lastFrameId !== null;
+
+
+  const effectiveBackendStatus =
+    effectiveBackendOnline
+      ? "online"
+      : backendStatus;
+
+
   const BackendIcon =
-    isBackendOnline
+    effectiveBackendOnline
       ? Wifi
       : WifiOff;
 
 
   const getBackendStatusText = () => {
+    if (
+      effectiveBackendOnline
+    ) {
+      return "Online";
+    }
+
     if (
       backendStatus ===
       "checking"
@@ -108,10 +173,25 @@ function RecognitionPage() {
       return "Checking";
     }
 
-    return isBackendOnline
-      ? "Online"
-      : "Offline";
+    return "Offline";
   };
+
+
+  /* =========================
+     STABLE AI
+  ========================= */
+
+  const hasStablePrediction =
+    predictionAccepted &&
+    Boolean(
+      predictionLabel
+    ) &&
+    (
+      predictionStatus ===
+        "stable" ||
+      predictionStatus ===
+        "holding"
+    );
 
 
   /* =========================
@@ -145,39 +225,6 @@ function RecognitionPage() {
 
 
   /* =========================
-     LANDMARK COUNTS
-  ========================= */
-
-  const totalHandLandmarks =
-    landmarks.leftHand.length +
-    landmarks.rightHand.length;
-
-
-  const totalPoseLandmarks =
-    landmarks.pose.length;
-
-
-  const totalFaceLandmarks =
-    landmarks.face.length;
-
-
-  const hasVisionData =
-    isCameraActive &&
-    lastFrameId !== null;
-
-
-  const displaySequenceCount =
-    isCameraActive
-      ? sequenceCount
-      : 0;
-
-
-  const hasPrediction =
-    predictionStatus === "ok" &&
-    Boolean(predictionLabel);
-
-
-  /* =========================
      CAMERA INFO
   ========================= */
 
@@ -186,7 +233,7 @@ function RecognitionPage() {
       return "Kamera belum aktif.";
     }
 
-    if (!isBackendOnline) {
+    if (!effectiveBackendOnline) {
       return (
         "Kamera aktif · " +
         "backend offline."
@@ -223,20 +270,29 @@ function RecognitionPage() {
 
     if (
       predictionStatus ===
+      "model_not_loaded"
+    ) {
+      return "Model Offline";
+    }
+
+    if (
+      predictionStatus ===
       "waiting_for_hand"
     ) {
       return "Menunggu Gerakan";
     }
 
     if (
-      predictionStatus ===
-      "model_not_loaded"
+      hasStablePrediction
     ) {
-      return "Model Offline";
+      return predictionLabel;
     }
 
-    if (hasPrediction) {
-      return predictionLabel;
+    if (
+      predictionStatus ===
+      "stabilizing"
+    ) {
+      return "Mendeteksi...";
     }
 
     return "Memproses AI";
@@ -274,8 +330,8 @@ function RecognitionPage() {
       "waiting_for_hand"
     ) {
       return (
-        "Sequence siap, tetapi tangan " +
-        "belum cukup terdeteksi."
+        "Arahkan tangan ke kamera " +
+        "dan lakukan satu gesture."
       );
     }
 
@@ -284,21 +340,52 @@ function RecognitionPage() {
       "model_not_loaded"
     ) {
       return (
-        "Model TorchScript belum tersedia."
+        "Model TorchScript belum aktif."
       );
     }
 
-    if (hasPrediction) {
+    if (
+      predictionStatus ===
+      "stable"
+    ) {
       return (
-        `Raw inference · ` +
-        `class ${predictionClassId} · ` +
+        `Prediksi stabil · ` +
+        `${predictionVotes}/${predictionVoteWindow} vote · ` +
         `${predictionInferenceMs ?? "--"} ms.`
       );
     }
 
+    if (
+      predictionStatus ===
+      "holding"
+    ) {
+      return (
+        `Menahan hasil stabil · ` +
+        `raw ${predictionRawLabel ?? "--"} ` +
+        `${Number(
+          predictionRawConfidencePercent ?? 0
+        ).toFixed(1)}%.`
+      );
+    }
+
+    if (
+      predictionStatus ===
+      "stabilizing"
+    ) {
+      return (
+        `Raw: ${predictionRawLabel ?? "--"} · ` +
+        `${Number(
+          predictionRawConfidencePercent ?? 0
+        ).toFixed(1)}% · ` +
+        `margin ${Number(
+          predictionRawMarginPercent ?? 0
+        ).toFixed(1)}%.`
+      );
+    }
+
     return (
-      "Sequence siap. Menunggu " +
-      "hasil inference model."
+      "Sequence siap. " +
+      "Menunggu hasil model."
     );
   };
 
@@ -308,20 +395,20 @@ function RecognitionPage() {
   ========================= */
 
   const getConfidenceText = () => {
-    if (!hasPrediction) {
+    if (!hasStablePrediction) {
       return "--";
     }
 
     return (
       `${Number(
-        predictionConfidencePercent ?? 0,
+        predictionConfidencePercent ?? 0
       ).toFixed(1)}%`
     );
   };
 
 
   /* =========================
-     TOP 3 TEXT
+     TOP 3
   ========================= */
 
   const getTop3Text = () => {
@@ -338,8 +425,9 @@ function RecognitionPage() {
       .map((item) => {
         const confidence =
           Number(
-            item.confidence_percent ??
-            0,
+            item
+              .confidence_percent ??
+            0
           ).toFixed(1);
 
         return (
@@ -352,22 +440,82 @@ function RecognitionPage() {
 
 
   /* =========================
-     STATUS MESSAGE
+     AI STATUS MESSAGE
   ========================= */
 
   const getStatusMessage = () => {
-    if (hasPrediction) {
+    if (
+      predictionStatus ===
+      "stable"
+    ) {
       return (
-        `AI aktif · ` +
+        `AI stabil · ` +
         `${predictionLabel} ` +
         `${Number(
-          predictionConfidencePercent ?? 0,
+          predictionConfidencePercent ?? 0
         ).toFixed(1)}% · ` +
-        `inference ` +
-        `${predictionInferenceMs ?? "--"} ms · ` +
-        `hand ` +
-        `${predictionHandPresentFrames ?? 0}/48 · ` +
-        `Top-3: ${getTop3Text()}`
+        `vote ${predictionVotes}/${predictionVoteWindow} · ` +
+        `raw ${predictionRawLabel ?? "--"} ` +
+        `${Number(
+          predictionRawConfidencePercent ?? 0
+        ).toFixed(1)}% · ` +
+        `margin ${Number(
+          predictionRawMarginPercent ?? 0
+        ).toFixed(1)}% · ` +
+        `inference ${predictionInferenceMs ?? "--"} ms.`
+      );
+    }
+
+    if (
+      predictionStatus ===
+      "holding" &&
+      hasStablePrediction
+    ) {
+      return (
+        `Menahan hasil ${predictionLabel} ` +
+        `${Number(
+          predictionConfidencePercent ?? 0
+        ).toFixed(1)}% · ` +
+        `raw sekarang ${predictionRawLabel ?? "--"} ` +
+        `${Number(
+          predictionRawConfidencePercent ?? 0
+        ).toFixed(1)}% · ` +
+        `vote ${predictionVotes}/${predictionVoteWindow}.`
+      );
+    }
+
+    if (
+      predictionStatus ===
+      "stabilizing"
+    ) {
+      return (
+        `Stabilisasi · ` +
+        `raw ${predictionRawLabel ?? "--"} ` +
+        `${Number(
+          predictionRawConfidencePercent ?? 0
+        ).toFixed(1)}% · ` +
+        `margin ${Number(
+          predictionRawMarginPercent ?? 0
+        ).toFixed(1)}% · ` +
+        `candidate ${
+          predictionCandidateValid
+            ? "valid"
+            : "ditolak"
+        } · ` +
+        `vote ${predictionVotes}/${predictionRequiredVotes} · ` +
+        `threshold conf ≥` +
+        `${Number(
+          predictionThresholds
+            ?.minConfidencePercent ??
+          70
+        ).toFixed(0)}% · ` +
+        `margin ≥` +
+        `${Number(
+          predictionThresholds
+            ?.minMarginPercent ??
+          10
+        ).toFixed(0)}% · ` +
+        `reason ${predictionReason}.`
       );
     }
 
@@ -377,9 +525,9 @@ function RecognitionPage() {
     ) {
       return (
         `Sequence 48/48 siap · ` +
-        `tangan terdeteksi ` +
+        `tangan pada window ` +
         `${predictionHandPresentFrames ?? 0}/48 frame · ` +
-        `menunggu gerakan.`
+        `menunggu tangan terdeteksi.`
       );
     }
 
@@ -400,8 +548,7 @@ function RecognitionPage() {
         `Pose ${sequenceShapes.pose.join("×")} · ` +
         `FaceHead ${sequenceShapes.facehead.join("×")} · ` +
         `Multi ${sequenceShapes.multimodal.join("×")} · ` +
-        `prep ${sequencePreprocessingMs ?? "--"} ms · ` +
-        `menunggu inference.`
+        `prep ${sequencePreprocessingMs ?? "--"} ms.`
       );
     }
 
@@ -436,7 +583,9 @@ function RecognitionPage() {
       );
     }
 
-    if (isBackendOnline) {
+    if (
+      effectiveBackendOnline
+    ) {
       return (
         "Backend FastAPI terhubung. " +
         "Aktifkan kamera."
@@ -451,12 +600,30 @@ function RecognitionPage() {
 
 
   /* =========================
-     HEADER STATUS
+     WORKSPACE STATUS
   ========================= */
 
   const getWorkspaceStatus = () => {
-    if (hasPrediction) {
-      return "AI Active";
+    if (
+      predictionStatus ===
+      "stable"
+    ) {
+      return "AI Stable";
+    }
+
+    if (
+      predictionStatus ===
+        "holding" &&
+      hasStablePrediction
+    ) {
+      return "AI Holding";
+    }
+
+    if (
+      predictionStatus ===
+      "stabilizing"
+    ) {
+      return "AI Stabilizing";
     }
 
     if (sequenceReady) {
@@ -480,7 +647,24 @@ function RecognitionPage() {
   ========================= */
 
   const getCameraBadge = () => {
-    if (hasPrediction) {
+    if (
+      predictionStatus ===
+      "stable"
+    ) {
+      return "STABLE";
+    }
+
+    if (
+      predictionStatus ===
+      "holding"
+    ) {
+      return "HOLD";
+    }
+
+    if (
+      predictionStatus ===
+      "stabilizing"
+    ) {
       return "AI";
     }
 
@@ -536,9 +720,7 @@ function RecognitionPage() {
       ========================== */}
 
       <section className="recognition-workspace">
-        {/* =========================
-            CAMERA PANEL
-        ========================== */}
+        {/* CAMERA */}
 
         <div className="camera-panel">
           <div className="camera-panel-header">
@@ -569,9 +751,7 @@ function RecognitionPage() {
           </div>
 
 
-          {/* =========================
-              CAMERA PREVIEW
-          ========================== */}
+          {/* CAMERA PREVIEW */}
 
           <div className="camera-preview">
             <video
@@ -587,8 +767,6 @@ function RecognitionPage() {
             />
 
 
-            {/* LANDMARK CANVAS */}
-
             {isCameraActive && (
               <LandmarkCanvas
                 landmarks={landmarks}
@@ -597,18 +775,11 @@ function RecognitionPage() {
             )}
 
 
-            {/* CORNERS */}
-
             <div className="camera-corner top-left" />
-
             <div className="camera-corner top-right" />
-
             <div className="camera-corner bottom-left" />
-
             <div className="camera-corner bottom-right" />
 
-
-            {/* PLACEHOLDER */}
 
             {!isCameraActive && (
               <div className="camera-placeholder">
@@ -657,8 +828,6 @@ function RecognitionPage() {
             )}
 
 
-            {/* OVERLAY BADGE */}
-
             <div className="camera-overlay-badge">
               <ScanLine
                 size={14}
@@ -669,8 +838,6 @@ function RecognitionPage() {
             </div>
 
 
-            {/* LIVE BADGE */}
-
             {isCameraActive && (
               <div className="camera-live-badge">
                 <span />
@@ -679,8 +846,6 @@ function RecognitionPage() {
               </div>
             )}
 
-
-            {/* LANDMARK STATUS */}
 
             {isCameraActive && (
               <div className="landmark-debug-status">
@@ -718,9 +883,7 @@ function RecognitionPage() {
           </div>
 
 
-          {/* =========================
-              CAMERA CONTROLS
-          ========================== */}
+          {/* CONTROLS */}
 
           <div className="camera-controls">
             <button
@@ -768,7 +931,7 @@ function RecognitionPage() {
 
 
         {/* =========================
-            RESULT PANEL
+            RESULT
         ========================== */}
 
         <aside className="recognition-result-panel">
@@ -790,9 +953,7 @@ function RecognitionPage() {
           </div>
 
 
-          {/* =========================
-              CURRENT PREDICTION
-          ========================== */}
+          {/* PREDICTION */}
 
           <div className="prediction-card">
             <div className="prediction-icon">
@@ -816,13 +977,9 @@ function RecognitionPage() {
           </div>
 
 
-          {/* =========================
-              METRICS
-          ========================== */}
+          {/* METRICS */}
 
           <div className="prediction-metrics">
-            {/* CONFIDENCE */}
-
             <div className="prediction-metric">
               <div className="metric-icon">
                 <Gauge
@@ -842,8 +999,6 @@ function RecognitionPage() {
               </div>
             </div>
 
-
-            {/* SEQUENCE */}
 
             <div className="prediction-metric">
               <div className="metric-icon">
@@ -867,11 +1022,12 @@ function RecognitionPage() {
             </div>
 
 
-            {/* BACKEND */}
-
             <div className="prediction-metric">
               <div
-                className={`metric-icon backend-${backendStatus}`}
+                className={
+                  `metric-icon ` +
+                  `backend-${effectiveBackendStatus}`
+                }
               >
                 <BackendIcon
                   size={16}
@@ -892,9 +1048,7 @@ function RecognitionPage() {
           </div>
 
 
-          {/* =========================
-              MODEL INFO
-          ========================== */}
+          {/* MODEL */}
 
           <div className="model-info-card">
             <div className="model-info-header">
@@ -918,9 +1072,7 @@ function RecognitionPage() {
           </div>
 
 
-          {/* =========================
-              AI STATUS
-          ========================== */}
+          {/* STATUS */}
 
           <div
             className={`recognition-warning ${
@@ -964,11 +1116,12 @@ function RecognitionPage() {
               strokeWidth={1.7}
             />
 
-            {hasPrediction
-              ? "Recognizing"
+            {hasStablePrediction
+              ? "Stable Word"
               : "Waiting"}
           </div>
         </div>
+
 
         <div className="transcript-content">
           <Languages
@@ -977,12 +1130,12 @@ function RecognitionPage() {
           />
 
           <p>
-            {hasPrediction
+            {hasStablePrediction
               ? (
-                  `Prediksi sementara: ` +
+                  `Prediksi kata stabil: ` +
                   `${predictionLabel}. ` +
-                  `Transcript stabil akan ` +
-                  `diaktifkan pada tahap berikutnya.`
+                  `Penyusunan menjadi kalimat ` +
+                  `akan diaktifkan pada tahap berikutnya.`
                 )
               : (
                   "Hasil pengenalan akan disusun " +
