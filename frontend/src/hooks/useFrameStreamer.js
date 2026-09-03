@@ -11,7 +11,12 @@ import {
 
 const FRAME_WIDTH = 640;
 
-const FRAME_INTERVAL_MS = 200;
+/*
+ * 100 ms = 10 FPS
+ *
+ * 48 frame ≈ 4.8 detik.
+ */
+const FRAME_INTERVAL_MS = 100;
 
 const JPEG_QUALITY = 0.65;
 
@@ -40,18 +45,23 @@ function useFrameStreamer({
   } = useRealtime();
 
 
-  const [sentFrames, setSentFrames] =
-    useState(0);
+  const [
+    sentFrames,
+    setSentFrames,
+  ] = useState(0);
+
 
   const [
     receivedFrames,
     setReceivedFrames,
   ] = useState(0);
 
+
   const [
     lastFrameBytes,
     setLastFrameBytes,
   ] = useState(0);
+
 
   const [
     isStreaming,
@@ -60,7 +70,7 @@ function useFrameStreamer({
 
 
   /* =========================
-     RESET NEW CAMERA SESSION
+     RESET CAMERA SESSION
   ========================= */
 
   useEffect(() => {
@@ -82,11 +92,12 @@ function useFrameStreamer({
 
     previousCameraStateRef.current =
       isCameraActive;
+
   }, [isCameraActive]);
 
 
   /* =========================
-     BACKEND FRAME ACK
+     FRAME ACK
   ========================= */
 
   useEffect(() => {
@@ -109,11 +120,12 @@ function useFrameStreamer({
         lastMessage.bytes ?? 0,
       ),
     );
+
   }, [lastMessage]);
 
 
   /* =========================
-     FRAME STREAM
+     STREAM
   ========================= */
 
   useEffect(() => {
@@ -140,6 +152,7 @@ function useFrameStreamer({
 
     const canvas =
       canvasRef.current;
+
 
     const context =
       canvas.getContext(
@@ -172,12 +185,6 @@ function useFrameStreamer({
       }
 
 
-      /*
-       * HAVE_CURRENT_DATA = 2
-       *
-       * Jangan capture sebelum
-       * browser punya frame video.
-       */
       if (
         video.readyState < 2
       ) {
@@ -187,6 +194,7 @@ function useFrameStreamer({
 
       const sourceWidth =
         video.videoWidth;
+
 
       const sourceHeight =
         video.videoHeight;
@@ -200,10 +208,6 @@ function useFrameStreamer({
       }
 
 
-      /*
-       * Maksimal 640px.
-       * Kamera kecil tidak di-upscale.
-       */
       const targetWidth =
         Math.min(
           FRAME_WIDTH,
@@ -219,6 +223,7 @@ function useFrameStreamer({
       const targetHeight =
         Math.max(
           1,
+
           Math.round(
             sourceHeight *
             scale,
@@ -245,13 +250,9 @@ function useFrameStreamer({
 
 
       /*
-       * PENTING:
+       * RAW FRAME.
        *
-       * Video di UI boleh mirror
-       * lewat CSS.
-       *
-       * Frame yang dikirim backend
-       * harus tetap RAW / tidak mirror.
+       * Jangan mirror data model.
        */
       context.drawImage(
         video,
@@ -328,9 +329,6 @@ function useFrameStreamer({
     };
 
 
-    /*
-     * 200 ms = 5 FPS
-     */
     const intervalId =
       window.setInterval(
         captureFrame,
@@ -345,6 +343,7 @@ function useFrameStreamer({
 
       setIsStreaming(false);
     };
+
   }, [
     videoRef,
     isCameraActive,

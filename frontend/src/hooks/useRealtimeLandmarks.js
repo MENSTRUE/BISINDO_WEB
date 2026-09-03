@@ -24,6 +24,21 @@ const EMPTY_COUNTS = {
 };
 
 
+const EMPTY_SEQUENCE = {
+  count: 0,
+  target: 48,
+  ready: false,
+  preprocessingMs: null,
+
+  shapes: {
+    hand: [0, 134],
+    pose: [0, 36],
+    facehead: [0, 52],
+    multimodal: [0, 222],
+  },
+};
+
+
 function useRealtimeLandmarks() {
   const {
     lastMessage,
@@ -59,8 +74,16 @@ function useRealtimeLandmarks() {
   ] = useState(null);
 
 
+  const [
+    sequence,
+    setSequence,
+  ] = useState(
+    EMPTY_SEQUENCE,
+  );
+
+
   /* =========================
-     RECEIVE LANDMARKS
+     LANDMARK MESSAGE
   ========================= */
 
   useEffect(() => {
@@ -170,11 +193,108 @@ function useRealtimeLandmarks() {
       ),
     );
 
+
+    const nextSequence =
+      lastMessage.sequence;
+
+
+    if (nextSequence) {
+      setSequence({
+        count:
+          Number(
+            nextSequence
+              .count ?? 0,
+          ),
+
+        target:
+          Number(
+            nextSequence
+              .target ?? 48,
+          ),
+
+        ready:
+          Boolean(
+            nextSequence.ready
+          ),
+
+        preprocessingMs:
+          Number(
+            nextSequence
+              .preprocessing_ms ?? 0,
+          ),
+
+        shapes: {
+          hand:
+            Array.isArray(
+              nextSequence
+                .shapes
+                ?.hand
+            )
+              ? nextSequence
+                  .shapes
+                  .hand
+              : [0, 134],
+
+          pose:
+            Array.isArray(
+              nextSequence
+                .shapes
+                ?.pose
+            )
+              ? nextSequence
+                  .shapes
+                  .pose
+              : [0, 36],
+
+          facehead:
+            Array.isArray(
+              nextSequence
+                .shapes
+                ?.facehead
+            )
+              ? nextSequence
+                  .shapes
+                  .facehead
+              : [0, 52],
+
+          multimodal:
+            Array.isArray(
+              nextSequence
+                .shapes
+                ?.multimodal
+            )
+              ? nextSequence
+                  .shapes
+                  .multimodal
+              : [0, 222],
+        },
+      });
+    }
+
   }, [lastMessage]);
 
 
   /* =========================
-     RESET WHEN DISCONNECTED
+     RESET MESSAGE
+  ========================= */
+
+  useEffect(() => {
+    if (
+      lastMessage?.type !==
+      "sequence_reset"
+    ) {
+      return;
+    }
+
+    setSequence(
+      EMPTY_SEQUENCE,
+    );
+
+  }, [lastMessage]);
+
+
+  /* =========================
+     DISCONNECTED
   ========================= */
 
   useEffect(() => {
@@ -182,20 +302,21 @@ function useRealtimeLandmarks() {
       return;
     }
 
-
     setLandmarks(
       EMPTY_LANDMARKS,
     );
-
 
     setCounts(
       EMPTY_COUNTS,
     );
 
-
     setProcessingMs(null);
 
     setLastFrameId(null);
+
+    setSequence(
+      EMPTY_SEQUENCE,
+    );
 
   }, [isConnected]);
 
@@ -203,8 +324,24 @@ function useRealtimeLandmarks() {
   return {
     landmarks,
     counts,
+
     processingMs,
     lastFrameId,
+
+    sequenceCount:
+      sequence.count,
+
+    sequenceTarget:
+      sequence.target,
+
+    sequenceReady:
+      sequence.ready,
+
+    sequencePreprocessingMs:
+      sequence.preprocessingMs,
+
+    sequenceShapes:
+      sequence.shapes,
   };
 }
 
