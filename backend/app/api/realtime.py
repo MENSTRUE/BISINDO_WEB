@@ -12,6 +12,11 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
+from app.inference.gesture_segmenter import (
+    IsolatedGestureSegmenter,
+    build_segment_result,
+)
+
 from app.inference.model_runtime import (
     model_runtime,
 )
@@ -20,23 +25,17 @@ from app.inference.predictor import (
     bisindo_predictor,
 )
 
-from app.inference.stabilizer import (
-    PredictionStabilizer,
+from app.preprocessing.isolated_sequence import (
+    IsolatedSequenceBuilder,
 )
 
 from app.services.landmark_extractor import (
     LandmarkExtractor,
 )
 
-from app.preprocessing.realtime_sequence import (
-    RealtimeSequenceBuilder,
-)
-
 
 router = APIRouter(
-    tags=[
-        "Realtime"
-    ],
+    tags=["Realtime"],
 )
 
 
@@ -44,12 +43,7 @@ router = APIRouter(
 # CONFIG
 # ============================================================
 
-INFERENCE_EVERY_N_FRAMES = 2
-
-
-MAX_FRAME_BYTES = (
-    2_000_000
-)
+MAX_FRAME_BYTES = 2_000_000
 
 
 # ============================================================
@@ -74,7 +68,6 @@ def decode_frame_base64(
             "Frame kosong."
         )
 
-
     try:
         frame_bytes = (
             base64.b64decode(
@@ -85,39 +78,27 @@ def decode_frame_base64(
 
     except Exception as error:
         raise ValueError(
-            (
-                "Frame bukan "
-                "Base64 valid."
-            )
+            "Frame bukan Base64 valid."
         ) from error
-
 
     if not frame_bytes:
         raise ValueError(
-            (
-                "Frame hasil decode "
-                "kosong."
-            )
+            "Frame hasil decode kosong."
         )
-
 
     if (
         len(frame_bytes)
         > MAX_FRAME_BYTES
     ):
         raise ValueError(
-            (
-                "Ukuran frame "
-                "terlalu besar."
-            )
+            "Ukuran frame terlalu besar."
         )
-
 
     return frame_bytes
 
 
 # ============================================================
-# WEBSOCKET
+# WEBSOCKET REALTIME
 # ============================================================
 
 @router.websocket(
@@ -128,22 +109,15 @@ async def realtime_websocket(
 ):
     await websocket.accept()
 
-
     # ========================================================
     # SESSION STATE
     # ========================================================
 
     frame_count = 0
 
+    last_client_frame_id = None
 
-    last_client_frame_id = (
-        None
-    )
-
-
-    last_prediction = (
-        None
-    )
+    last_prediction = None
 
 
     # ========================================================
@@ -154,14 +128,12 @@ async def realtime_websocket(
         LandmarkExtractor()
     )
 
-
-    sequence_builder = (
-        RealtimeSequenceBuilder()
+    segmenter = (
+        IsolatedGestureSegmenter()
     )
 
-
-    stabilizer = (
-        PredictionStabilizer()
+    sequence_builder = (
+        IsolatedSequenceBuilder()
     )
 
 
@@ -179,12 +151,15 @@ async def realtime_websocket(
 
             "message":
                 (
-                    "BISINDO realtime "
-                    "channel ready."
+                    "BISINDO isolated "
+                    "gesture channel ready."
                 ),
 
             "vision":
                 "ready",
+
+            "recognition_mode":
+                "isolated_gesture",
 
             "sequence_target":
                 48,
@@ -211,7 +186,6 @@ async def realtime_websocket(
                 await websocket
                 .receive_json()
             )
-
 
             message_type = (
                 message.get(
@@ -273,6 +247,9 @@ async def realtime_websocket(
                         "vision":
                             "ready",
 
+                        "recognition_mode":
+                            "isolated_gesture",
+
                         "sequence_target":
                             48,
 
@@ -291,29 +268,22 @@ async def realtime_websocket(
 
 
             # =================================================
-            # RESET SEQUENCE
+            # RESET
             # =================================================
 
             if (
                 message_type
                 == "reset_sequence"
             ):
-                sequence_builder.reset()
-
-                stabilizer.reset()
-
-
                 frame_count = 0
 
+                last_client_frame_id = None
 
-                last_client_frame_id = (
-                    None
-                )
+                last_prediction = None
 
+                segmenter.reset()
 
-                last_prediction = (
-                    None
-                )
+                sequence_builder.reset()
 
 
                 await websocket.send_json(
@@ -324,20 +294,16 @@ async def realtime_websocket(
                         "status":
                             "ok",
 
-                        "count":
-                            0,
-
-                        "target":
-                            48,
-
                         "prediction":
                             None,
+
+                        "segment":
+                            segmenter.snapshot(),
 
                         "server_time":
                             utc_now(),
                     }
                 )
-
 
                 continue
 
@@ -350,10 +316,7 @@ async def realtime_websocket(
                 message_type
                 == "frame"
             ):
-                frame_id = (
-                    None
-                )
-
+                frame_id = None
 
                 try:
                     pipeline_started = (
@@ -374,36 +337,6 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # NEW CAMERA SESSION
-                    # =========================================
-
-                    if (
-                        last_client_frame_id
-                        is not None
-
-                        and frame_id
-                        <= last_client_frame_id
-                    ):
-                        frame_count = 0
-
-
-                        sequence_builder.reset()
-
-
-                        stabilizer.reset()
-
-
-                        last_prediction = (
-                            None
-                        )
-
-
-                    last_client_frame_id = (
-                        frame_id
-                    )
-
-
-                    # =========================================
                     # FRAME META
                     # =========================================
 
@@ -414,7 +347,6 @@ async def realtime_websocket(
                         )
                     )
 
-
                     height = int(
                         message.get(
                             "height",
@@ -423,21 +355,40 @@ async def realtime_websocket(
                     )
 
 
-                    image_base64 = (
-                        message.get(
-                            "image_base64",
-                            "",
-                        )
+                    # =========================================
+                    # NEW CAMERA SESSION
+                    # =========================================
+
+                    if (
+                        last_client_frame_id
+                        is not None
+                        and frame_id
+                        <= last_client_frame_id
+                    ):
+                        frame_count = 0
+
+                        last_prediction = None
+
+                        segmenter.reset()
+
+                        sequence_builder.reset()
+
+
+                    last_client_frame_id = (
+                        frame_id
                     )
 
 
                     # =========================================
-                    # BASE64 DECODE
+                    # DECODE FRAME
                     # =========================================
 
                     frame_bytes = (
                         decode_frame_base64(
-                            image_base64
+                            message.get(
+                                "image_base64",
+                                "",
+                            )
                         )
                     )
 
@@ -453,31 +404,8 @@ async def realtime_websocket(
                     )
 
 
-                    # =========================================
-                    # LAZY SEQUENCE RECORD
-                    #
-                    # Tidak build ulang seluruh
-                    # sequence 48 frame di sini.
-                    # =========================================
-
-                    sequence_status = (
-                        sequence_builder
-                        .add_frame(
-                            frame_id,
-
-                            result[
-                                "landmarks"
-                            ],
-                        )
-                    )
-
-
                     frame_count += 1
 
-
-                    # =========================================
-                    # COUNTS
-                    # =========================================
 
                     counts = (
                         result[
@@ -486,139 +414,299 @@ async def realtime_websocket(
                     )
 
 
-                    # =========================================
-                    # CURRENT HAND
-                    # =========================================
-
                     current_hand_detected = (
-                        (
-                            counts[
-                                "left_hand"
-                            ]
-                            > 0
-                        )
-
+                        counts[
+                            "left_hand"
+                        ]
+                        > 0
                         or
-
-                        (
-                            counts[
-                                "right_hand"
-                            ]
-                            > 0
-                        )
+                        counts[
+                            "right_hand"
+                        ]
+                        > 0
                     )
 
 
                     # =========================================
-                    # BUILD + MODEL
+                    # ISOLATED GESTURE SEGMENTATION
                     # =========================================
 
-                    build_ms = 0.0
+                    (
+                        segment_state,
+                        completed_segment,
+                    ) = segmenter.observe(
+                        frame_id,
+                        result[
+                            "landmarks"
+                        ],
+                        current_hand_detected,
+                    )
+
+
+                    segment_build_ms = 0.0
+
+                    inference_ms = 0.0
+
+
+                    # =========================================
+                    # ONE SEGMENT
+                    # →
+                    # ONE 48-FRAME SEQUENCE
+                    # →
+                    # ONE INFERENCE
+                    # =========================================
+
+                    if (
+                        completed_segment
+                        is not None
+                    ):
+                        try:
+                            # =================================
+                            # TEMPORAL SAMPLING + PREPROCESS
+                            # =================================
+
+                            (
+                                sequences,
+                                sequence_info,
+                            ) = (
+                                sequence_builder
+                                .build(
+                                    completed_segment[
+                                        "frames"
+                                    ]
+                                )
+                            )
+
+
+                            segment_build_ms = float(
+                                sequence_info.get(
+                                    "build_ms",
+                                    0.0,
+                                )
+                                or 0.0
+                            )
+
+
+                            # =================================
+                            # TORCHSCRIPT INFERENCE
+                            # =================================
+
+                            raw_prediction = (
+                                bisindo_predictor
+                                .predict(
+                                    sequences
+                                )
+                            )
+
+
+                            inference_ms = float(
+                                raw_prediction.get(
+                                    "inference_ms",
+                                    0.0,
+                                )
+                                or 0.0
+                            )
+
+
+                            # =================================
+                            # RESULT QUALITY GATE
+                            # =================================
+
+                            last_prediction = (
+                                build_segment_result(
+                                    raw_prediction,
+                                    completed_segment,
+                                    sequence_info,
+                                )
+                            )
+
+
+                        except Exception as analysis_error:
+                            print(
+                                "[Segment] "
+                                "Analysis error:",
+                                analysis_error,
+                            )
+
+
+                            last_prediction = {
+                                "status":
+                                    "error",
+
+                                "raw_status":
+                                    "error",
+
+                                "accepted":
+                                    False,
+
+                                "class_id":
+                                    None,
+
+                                "label":
+                                    None,
+
+                                "confidence":
+                                    0.0,
+
+                                "confidence_percent":
+                                    0.0,
+
+                                "margin":
+                                    0.0,
+
+                                "margin_percent":
+                                    0.0,
+
+                                "top3":
+                                    [],
+
+                                "hand_present_frames":
+                                    0,
+
+                                "segment_id":
+                                    completed_segment.get(
+                                        "segment_id"
+                                    ),
+
+                                "source_frames":
+                                    completed_segment.get(
+                                        "source_frames",
+                                        0,
+                                    ),
+
+                                "sampled_frames":
+                                    48,
+
+                                "unique_sampled_frames":
+                                    0,
+
+                                "sequence_build_ms":
+                                    segment_build_ms,
+
+                                "inference_ms":
+                                    None,
+
+                                "end_reason":
+                                    completed_segment.get(
+                                        "end_reason",
+                                        "unknown",
+                                    ),
+
+                                "peak_motion":
+                                    completed_segment.get(
+                                        "peak_motion",
+                                        0.0,
+                                    ),
+
+                                "thresholds": {
+                                    "min_confidence":
+                                        0.70,
+
+                                    "min_confidence_percent":
+                                        70.0,
+
+                                    "min_margin":
+                                        0.10,
+
+                                    "min_margin_percent":
+                                        10.0,
+                                },
+
+                                "error":
+                                    str(
+                                        analysis_error
+                                    ),
+                            }
+
+
+                        # =====================================
+                        # FINISH ANALYSIS
+                        # =====================================
+
+                        segment_state = (
+                            segmenter
+                            .finish_analysis(
+                                last_prediction
+                            )
+                        )
+
+
+                        # =====================================
+                        # SEGMENT LOG
+                        # =====================================
+
+                        print(
+                            "[Segment] "
+                            f"id="
+                            f"{last_prediction.get('segment_id')} "
+                            f"source="
+                            f"{last_prediction.get('source_frames')} "
+                            f"sampled="
+                            f"{last_prediction.get('sampled_frames')} "
+                            f"unique="
+                            f"{last_prediction.get('unique_sampled_frames', 0)} "
+                            f"build="
+                            f"{float(last_prediction.get('sequence_build_ms', 0) or 0):.2f}ms "
+                            f"infer="
+                            f"{float(last_prediction.get('inference_ms', 0) or 0):.2f}ms "
+                            f"end="
+                            f"{last_prediction.get('end_reason')} "
+                            f"result="
+                            f"{last_prediction.get('label') or '-'} "
+                            f"{float(last_prediction.get('confidence_percent', 0) or 0):.1f}% "
+                            f"margin="
+                            f"{float(last_prediction.get('margin_percent', 0) or 0):.1f}% "
+                            f"status="
+                            f"{last_prediction.get('status')}"
+                        )
+
+
+                    # =========================================
+                    # PREDICTION PAYLOAD
+                    # =========================================
+
+                    prediction_payload = None
 
 
                     if (
-                        sequence_status[
-                            "ready"
-                        ]
+                        last_prediction
+                        is not None
                     ):
-                        should_infer = (
+                        prediction_payload = dict(
                             last_prediction
-                            is None
+                        )
 
-                            or
 
-                            (
-                                frame_count
-                                % INFERENCE_EVERY_N_FRAMES
-                                == 0
+                        result_event = bool(
+                            segment_state.get(
+                                "result_event",
+                                False,
                             )
                         )
 
 
-                        if should_infer:
-                            # =================================
-                            # BUILD FULL 48 FRAME
-                            # HANYA SEKARANG
-                            # =================================
-
-                            ready_sequences = (
-                                sequence_builder
-                                .get_ready_sequences()
-                            )
+                        prediction_payload[
+                            "result_event"
+                        ] = (
+                            result_event
+                        )
 
 
-                            build_ms = (
-                                sequence_builder
-                                .last_build_ms
-                            )
-
-
-                            if (
-                                ready_sequences
-                                is not None
-                            ):
-                                # =============================
-                                # RAW AI
-                                # =============================
-
-                                raw_prediction = (
-                                    bisindo_predictor
-                                    .predict(
-                                        ready_sequences
-                                    )
+                        prediction_payload[
+                            "accepted_event"
+                        ] = (
+                            result_event
+                            and bool(
+                                prediction_payload.get(
+                                    "accepted",
+                                    False,
                                 )
-
-
-                                # =============================
-                                # STABILIZATION
-                                # =============================
-
-                                last_prediction = (
-                                    stabilizer.update(
-                                        raw_prediction,
-
-                                        current_hand_detected=(
-                                            current_hand_detected
-                                        ),
-                                    )
-                                )
-
-
-                    else:
-                        last_prediction = (
-                            None
+                            )
                         )
 
 
-                        stabilizer.reset()
-
-
                     # =========================================
-                    # PREPROCESSING PERFORMANCE
-                    # =========================================
-
-                    sequence_status[
-                        "sequence_build_ms"
-                    ] = round(
-                        build_ms,
-                        3,
-                    )
-
-
-                    sequence_status[
-                        "preprocessing_ms"
-                    ] = round(
-                        (
-                            sequence_builder
-                            .last_record_ms
-                        )
-                        + build_ms,
-                        3,
-                    )
-
-
-                    # =========================================
-                    # TOTAL PIPELINE TIME
+                    # TOTAL PIPELINE
                     # =========================================
 
                     pipeline_ms = (
@@ -631,7 +719,7 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # SEND ONE RESULT PER FRAME
+                    # SEND RESULT
                     # =========================================
 
                     await websocket.send_json(
@@ -675,14 +763,29 @@ async def realtime_websocket(
                                     2,
                                 ),
 
-                            "sequence":
-                                sequence_status,
+                            "segment_build_ms":
+                                round(
+                                    segment_build_ms,
+                                    2,
+                                ),
+
+                            "inference_ms":
+                                round(
+                                    inference_ms,
+                                    2,
+                                ),
+
+                            "segment":
+                                segment_state,
 
                             "prediction":
-                                last_prediction,
+                                prediction_payload,
 
                             "model_loaded":
                                 model_runtime.loaded,
+
+                            "recognition_mode":
+                                "isolated_gesture",
 
                             "server_time":
                                 utc_now(),
@@ -691,7 +794,7 @@ async def realtime_websocket(
 
 
                     # =========================================
-                    # TERMINAL LOG
+                    # PERIODIC DEBUG LOG
                     # =========================================
 
                     if (
@@ -699,139 +802,45 @@ async def realtime_websocket(
                         % 10
                         == 0
                     ):
-                        prediction_text = (
-                            "-"
-                        )
-
-
-                        inference_ms = 0.0
+                        prediction_text = "-"
 
 
                         if (
                             last_prediction
                             is not None
                         ):
-                            pred_status = (
-                                last_prediction.get(
-                                    "status",
-                                    "idle",
-                                )
-                            )
-
-
-                            raw_label = (
-                                last_prediction.get(
-                                    "raw_label"
-                                )
-                                or "-"
-                            )
-
-
-                            raw_conf = float(
-                                last_prediction.get(
-                                    "raw_confidence_percent",
-                                    0.0,
-                                )
-                                or 0.0
-                            )
-
-
-                            raw_margin = float(
-                                last_prediction.get(
-                                    "raw_margin_percent",
-                                    0.0,
-                                )
-                                or 0.0
-                            )
-
-
-                            stable_label = (
-                                last_prediction.get(
-                                    "label"
-                                )
-                                or "-"
-                            )
-
-
-                            stable_conf = float(
-                                last_prediction.get(
-                                    "confidence_percent",
-                                    0.0,
-                                )
-                                or 0.0
-                            )
-
-
-                            votes = int(
-                                last_prediction.get(
-                                    "votes",
-                                    0,
-                                )
-                                or 0
-                            )
-
-
-                            required_votes = int(
-                                last_prediction.get(
-                                    "required_votes",
-                                    3,
-                                )
-                                or 3
-                            )
-
-
-                            inference_ms = float(
-                                last_prediction.get(
-                                    "inference_ms",
-                                    0.0,
-                                )
-                                or 0.0
-                            )
-
-
                             prediction_text = (
-                                f"raw={raw_label} "
-                                f"{raw_conf:.1f}% "
-                                f"margin={raw_margin:.1f}% "
-                                f"stable={stable_label} "
-                                f"{stable_conf:.1f}% "
-                                f"vote={votes}/{required_votes} "
-                                f"status={pred_status}"
+                                f"last="
+                                f"{last_prediction.get('label') or '-'} "
+                                f"{float(last_prediction.get('confidence_percent', 0) or 0):.1f}% "
+                                f"result="
+                                f"{last_prediction.get('status')}"
                             )
 
 
                         print(
                             "[Realtime] "
-
                             f"frame={frame_count} "
-
-                            f"seq="
-                            f"{sequence_status['count']}/48 "
-
-                            f"ready="
-                            f"{sequence_status['ready']} "
-
+                            f"state="
+                            f"{segment_state.get('status')} "
+                            f"source="
+                            f"{segment_state.get('source_frames')} "
+                            f"motion="
+                            f"{float(segment_state.get('motion_ema', 0) or 0):.4f} "
+                            f"still="
+                            f"{segment_state.get('still_frames')} "
                             f"handL="
                             f"{counts['left_hand']} "
-
                             f"handR="
                             f"{counts['right_hand']} "
-
                             f"vision="
                             f"{result['processing_ms']}ms "
-
-                            f"record="
-                            f"{sequence_builder.last_record_ms:.2f}ms "
-
                             f"build="
-                            f"{build_ms:.2f}ms "
-
+                            f"{segment_build_ms:.2f}ms "
                             f"infer="
                             f"{inference_ms:.2f}ms "
-
                             f"total="
                             f"{pipeline_ms:.2f}ms "
-
                             f"{prediction_text}"
                         )
 
@@ -864,7 +873,7 @@ async def realtime_websocket(
 
 
                 # =================================================
-                # VISION / MODEL ERROR
+                # VISION / PIPELINE ERROR
                 # =================================================
 
                 except Exception as error:
@@ -922,7 +931,7 @@ async def realtime_websocket(
 
 
     # ========================================================
-    # CLIENT DISCONNECTED
+    # CLIENT DISCONNECT
     # ========================================================
 
     except WebSocketDisconnect:
@@ -934,7 +943,7 @@ async def realtime_websocket(
 
 
     # ========================================================
-    # SERVER ERROR
+    # WEBSOCKET ERROR
     # ========================================================
 
     except Exception as error:
@@ -949,11 +958,9 @@ async def realtime_websocket(
     # ========================================================
 
     finally:
+        segmenter.reset()
+
         sequence_builder.reset()
-
-
-        stabilizer.reset()
-
 
         extractor.close()
 

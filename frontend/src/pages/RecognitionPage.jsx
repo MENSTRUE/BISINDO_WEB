@@ -13,12 +13,20 @@ import {
   WifiOff,
 } from "lucide-react";
 
-import useCamera from "../hooks/useCamera";
-import useBackendHealth from "../hooks/useBackendHealth";
-import useFrameStreamer from "../hooks/useFrameStreamer";
-import useRealtimeLandmarks from "../hooks/useRealtimeLandmarks";
+import useCamera
+  from "../hooks/useCamera";
 
-import LandmarkCanvas from "../components/landmarks/LandmarkCanvas";
+import useBackendHealth
+  from "../hooks/useBackendHealth";
+
+import useFrameStreamer
+  from "../hooks/useFrameStreamer";
+
+import useRealtimeLandmarks
+  from "../hooks/useRealtimeLandmarks";
+
+import LandmarkCanvas
+  from "../components/landmarks/LandmarkCanvas";
 
 import "../styles/recognition.css";
 
@@ -43,13 +51,16 @@ function RecognitionPage() {
   ========================= */
 
   const {
-    status: backendStatus,
-    isOnline: isBackendOnline,
+    status:
+      backendStatus,
+
+    isOnline:
+      isBackendOnline,
   } = useBackendHealth();
 
 
   /* =========================
-     FRAME STREAM
+     STREAM
   ========================= */
 
   const {
@@ -65,45 +76,47 @@ function RecognitionPage() {
 
 
   /* =========================
-     VISION + AI
+     REALTIME
   ========================= */
 
   const {
     landmarks,
 
     processingMs,
+    pipelineMs,
     lastFrameId,
 
-    sequenceCount,
-    sequenceTarget,
-    sequenceReady,
-    sequencePreprocessingMs,
-    sequenceShapes,
+    segmentStatus,
+    segmentReason,
+    segmentId,
+    segmentSourceFrames,
+
+    segmentMotionEma,
+    segmentStillFrames,
+
+    segmentThresholds,
 
     predictionStatus,
     predictionAccepted,
 
     predictionLabel,
-    predictionClassId,
-
     predictionConfidencePercent,
     predictionMarginPercent,
 
-    predictionVotes,
-    predictionRequiredVotes,
-    predictionVoteWindow,
-
-    predictionRawLabel,
-    predictionRawConfidencePercent,
-    predictionRawMarginPercent,
-
-    predictionCandidateValid,
-    predictionReason,
+    predictionTop3,
 
     predictionInferenceMs,
-    predictionHandPresentFrames,
 
-    predictionTop3,
+    predictionSegmentId,
+
+    predictionSourceFrames,
+    predictionSampledFrames,
+    predictionUniqueSampledFrames,
+
+    predictionSequenceBuildMs,
+
+    predictionEndReason,
+
     predictionThresholds,
   } = useRealtimeLandmarks();
 
@@ -113,7 +126,8 @@ function RecognitionPage() {
   ========================= */
 
   const totalHandLandmarks =
-    landmarks.leftHand.length +
+    landmarks.leftHand.length
+    +
     landmarks.rightHand.length;
 
 
@@ -126,24 +140,38 @@ function RecognitionPage() {
 
 
   const hasVisionData =
-    isCameraActive &&
+    isCameraActive
+    &&
     lastFrameId !== null;
 
 
-  const displaySequenceCount =
-    isCameraActive
-      ? sequenceCount
-      : 0;
+  /* =========================
+     RESULT
+  ========================= */
+
+  const hasAcceptedWord =
+    predictionAccepted
+    &&
+    Boolean(
+      predictionLabel
+    );
+
+
+  const hasPredictionResult =
+    predictionStatus !== "idle";
 
 
   /* =========================
-     EFFECTIVE BACKEND STATUS
+     BACKEND
   ========================= */
 
   const effectiveBackendOnline =
-    isBackendOnline ||
-    isStreaming ||
-    receivedFrames > 0 ||
+    isBackendOnline
+    ||
+    isStreaming
+    ||
+    receivedFrames > 0
+    ||
     lastFrameId !== null;
 
 
@@ -159,529 +187,723 @@ function RecognitionPage() {
       : WifiOff;
 
 
-  const getBackendStatusText = () => {
-    if (
-      effectiveBackendOnline
-    ) {
-      return "Online";
-    }
+  const getBackendStatusText =
+    () => {
+      if (
+        effectiveBackendOnline
+      ) {
+        return "Online";
+      }
 
-    if (
-      backendStatus ===
-      "checking"
-    ) {
-      return "Checking";
-    }
+      if (
+        backendStatus ===
+        "checking"
+      ) {
+        return "Checking";
+      }
 
-    return "Offline";
-  };
-
-
-  /* =========================
-     STABLE AI
-  ========================= */
-
-  const hasStablePrediction =
-    predictionAccepted &&
-    Boolean(
-      predictionLabel
-    ) &&
-    (
-      predictionStatus ===
-        "stable" ||
-      predictionStatus ===
-        "holding"
-    );
+      return "Offline";
+    };
 
 
   /* =========================
      CAMERA STATUS
   ========================= */
 
-  const getCameraStatusText = () => {
-    if (
-      cameraStatus ===
-      "requesting"
-    ) {
-      return "Meminta Izin";
-    }
+  const getCameraStatusText =
+    () => {
+      if (
+        cameraStatus ===
+        "requesting"
+      ) {
+        return "Meminta Izin";
+      }
 
-    if (
-      cameraStatus ===
-      "active"
-    ) {
-      return "Camera On";
-    }
+      if (
+        cameraStatus ===
+        "active"
+      ) {
+        return "Camera On";
+      }
 
-    if (
-      cameraStatus ===
-      "error"
-    ) {
-      return "Camera Error";
-    }
+      if (
+        cameraStatus ===
+        "error"
+      ) {
+        return "Camera Error";
+      }
 
-    return "Camera Off";
-  };
+      return "Camera Off";
+    };
 
 
   /* =========================
      CAMERA INFO
   ========================= */
 
-  const getCameraInfoText = () => {
-    if (!isCameraActive) {
-      return "Kamera belum aktif.";
-    }
+  const getCameraInfoText =
+    () => {
+      if (
+        !isCameraActive
+      ) {
+        return (
+          "Kamera belum aktif."
+        );
+      }
 
-    if (!effectiveBackendOnline) {
+
+      if (
+        !effectiveBackendOnline
+      ) {
+        return (
+          "Kamera aktif · backend offline."
+        );
+      }
+
+
+      if (
+        !isStreaming
+      ) {
+        return (
+          "Kamera aktif · menunggu WebSocket."
+        );
+      }
+
+
       return (
-        "Kamera aktif · " +
-        "backend offline."
+        `Streaming ${streamFps} FPS · `
+        +
+        `Sent ${sentFrames} · `
+        +
+        `Backend ${receivedFrames}`
       );
-    }
-
-    if (!isStreaming) {
-      return (
-        "Kamera aktif · " +
-        "menunggu WebSocket."
-      );
-    }
-
-    return (
-      `Streaming ${streamFps} FPS · ` +
-      `Sent ${sentFrames} · ` +
-      `Backend ${receivedFrames}`
-    );
-  };
+    };
 
 
   /* =========================
      PREDICTION VALUE
   ========================= */
 
-  const getPredictionValue = () => {
-    if (!isCameraActive) {
-      return "Menunggu Kamera";
-    }
+  const getPredictionValue =
+    () => {
+      if (
+        !isCameraActive
+      ) {
+        return (
+          "Menunggu Kamera"
+        );
+      }
 
-    if (!sequenceReady) {
-      return "Mengisi Sequence";
-    }
 
-    if (
-      predictionStatus ===
-      "model_not_loaded"
-    ) {
-      return "Model Offline";
-    }
+      if (
+        segmentStatus ===
+        "recording"
+      ) {
+        return (
+          "Merekam Gesture..."
+        );
+      }
 
-    if (
-      predictionStatus ===
-      "waiting_for_hand"
-    ) {
-      return "Menunggu Gerakan";
-    }
 
-    if (
-      hasStablePrediction
-    ) {
-      return predictionLabel;
-    }
+      if (
+        segmentStatus ===
+        "analyzing"
+      ) {
+        return (
+          "Menganalisis..."
+        );
+      }
 
-    if (
-      predictionStatus ===
-      "stabilizing"
-    ) {
-      return "Mendeteksi...";
-    }
 
-    return "Memproses AI";
-  };
+      if (
+        segmentStatus ===
+        "cooldown"
+      ) {
+        if (
+          hasAcceptedWord
+        ) {
+          return (
+            predictionLabel
+          );
+        }
+
+
+        if (
+          predictionStatus ===
+          "uncertain"
+        ) {
+          return (
+            "Tidak Yakin"
+          );
+        }
+      }
+
+
+      if (
+        segmentStatus ===
+        "waiting"
+      ) {
+        if (
+          hasAcceptedWord
+        ) {
+          return (
+            predictionLabel
+          );
+        }
+
+
+        return (
+          "Menunggu Gerakan"
+        );
+      }
+
+
+      if (
+        predictionStatus ===
+        "model_not_loaded"
+      ) {
+        return (
+          "Model Offline"
+        );
+      }
+
+
+      return (
+        "Menunggu Gerakan"
+      );
+    };
 
 
   /* =========================
-     PREDICTION SUBTITLE
+     SUBTITLE
   ========================= */
 
-  const getPredictionSubtitle = () => {
-    if (!isCameraActive) {
-      return (
-        "Belum ada gerakan " +
-        "yang diproses."
-      );
-    }
+  const getPredictionSubtitle =
+    () => {
+      if (
+        !isCameraActive
+      ) {
+        return (
+          "Aktifkan kamera untuk memulai."
+        );
+      }
 
-    if (!hasVisionData) {
-      return (
-        "Frame kamera sedang " +
-        "diproses oleh backend."
-      );
-    }
 
-    if (!sequenceReady) {
-      return (
-        `Mengumpulkan input temporal ` +
-        `${sequenceCount}/${sequenceTarget} frame.`
-      );
-    }
+      if (
+        !hasVisionData
+      ) {
+        return (
+          "Menunggu frame kamera."
+        );
+      }
 
-    if (
-      predictionStatus ===
-      "waiting_for_hand"
-    ) {
-      return (
-        "Arahkan tangan ke kamera " +
-        "dan lakukan satu gesture."
-      );
-    }
 
-    if (
-      predictionStatus ===
-      "model_not_loaded"
-    ) {
-      return (
-        "Model TorchScript belum aktif."
-      );
-    }
+      if (
+        segmentStatus ===
+        "recording"
+      ) {
+        return (
+          `Gesture #${segmentId ?? "--"} · `
+          +
+          `${segmentSourceFrames} source frame · `
+          +
+          `motion ${Number(
+            segmentMotionEma ?? 0
+          ).toFixed(4)}.`
+        );
+      }
 
-    if (
-      predictionStatus ===
-      "stable"
-    ) {
-      return (
-        `Prediksi stabil · ` +
-        `${predictionVotes}/${predictionVoteWindow} vote · ` +
-        `${predictionInferenceMs ?? "--"} ms.`
-      );
-    }
 
-    if (
-      predictionStatus ===
-      "holding"
-    ) {
-      return (
-        `Menahan hasil stabil · ` +
-        `raw ${predictionRawLabel ?? "--"} ` +
-        `${Number(
-          predictionRawConfidencePercent ?? 0
-        ).toFixed(1)}%.`
-      );
-    }
+      if (
+        segmentStatus ===
+        "analyzing"
+      ) {
+        return (
+          "Gesture selesai · sampling seluruh gesture menjadi 48 frame."
+        );
+      }
 
-    if (
-      predictionStatus ===
-      "stabilizing"
-    ) {
-      return (
-        `Raw: ${predictionRawLabel ?? "--"} · ` +
-        `${Number(
-          predictionRawConfidencePercent ?? 0
-        ).toFixed(1)}% · ` +
-        `margin ${Number(
-          predictionRawMarginPercent ?? 0
-        ).toFixed(1)}%.`
-      );
-    }
 
-    return (
-      "Sequence siap. " +
-      "Menunggu hasil model."
-    );
-  };
+      if (
+        segmentStatus ===
+        "cooldown"
+        &&
+        hasAcceptedWord
+      ) {
+        return (
+          `Kata diterima · `
+          +
+          `${Number(
+            predictionConfidencePercent
+          ).toFixed(1)}% · `
+          +
+          `diam sebentar untuk gesture berikutnya.`
+        );
+      }
+
+
+      if (
+        segmentStatus ===
+        "cooldown"
+        &&
+        predictionStatus ===
+        "uncertain"
+      ) {
+        return (
+          `Top-1 ${predictionLabel ?? "--"} `
+          +
+          `${Number(
+            predictionConfidencePercent ?? 0
+          ).toFixed(1)}% · `
+          +
+          `hasil belum cukup yakin.`
+        );
+      }
+
+
+      if (
+        segmentStatus ===
+        "waiting"
+        &&
+        hasAcceptedWord
+      ) {
+        return (
+          "Hasil terakhir · sistem siap membaca gesture berikutnya."
+        );
+      }
+
+
+      return (
+        "Lakukan satu gesture BISINDO lalu diam sebentar."
+      );
+    };
 
 
   /* =========================
      CONFIDENCE
   ========================= */
 
-  const getConfidenceText = () => {
-    if (!hasStablePrediction) {
-      return "--";
-    }
+  const getConfidenceText =
+    () => {
+      if (
+        !hasAcceptedWord
+      ) {
+        return "--";
+      }
 
-    return (
-      `${Number(
-        predictionConfidencePercent ?? 0
-      ).toFixed(1)}%`
-    );
-  };
+
+      return (
+        `${Number(
+          predictionConfidencePercent
+        ).toFixed(1)}%`
+      );
+    };
+
+
+  /* =========================
+     GESTURE METRIC
+  ========================= */
+
+  const getGestureMetric =
+    () => {
+      if (
+        segmentStatus ===
+        "recording"
+      ) {
+        return (
+          `${segmentSourceFrames} fr`
+        );
+      }
+
+
+      if (
+        predictionSourceFrames
+        > 0
+      ) {
+        return (
+          `${predictionSourceFrames} → 48`
+        );
+      }
+
+
+      return "--";
+    };
 
 
   /* =========================
      TOP 3
   ========================= */
 
-  const getTop3Text = () => {
-    if (
-      !Array.isArray(
-        predictionTop3
-      ) ||
-      predictionTop3.length === 0
-    ) {
-      return "--";
-    }
+  const getTop3Text =
+    () => {
+      if (
+        !Array.isArray(
+          predictionTop3
+        )
+        ||
+        predictionTop3.length === 0
+      ) {
+        return "--";
+      }
 
-    return predictionTop3
-      .map((item) => {
-        const confidence =
-          Number(
+
+      return predictionTop3
+        .map(
+          (
             item
-              .confidence_percent ??
-            0
-          ).toFixed(1);
+          ) => {
+            const confidence =
+              Number(
+                item
+                  .confidence_percent ??
+                0
+              )
+              .toFixed(1);
 
-        return (
-          `${item.label} ` +
-          `${confidence}%`
-        );
-      })
-      .join(" · ");
-  };
+
+            return (
+              `${item.label} ${confidence}%`
+            );
+          }
+        )
+        .join(" · ");
+    };
 
 
   /* =========================
-     AI STATUS MESSAGE
+     STATUS MESSAGE
   ========================= */
 
-  const getStatusMessage = () => {
-    if (
-      predictionStatus ===
-      "stable"
-    ) {
-      return (
-        `AI stabil · ` +
-        `${predictionLabel} ` +
-        `${Number(
-          predictionConfidencePercent ?? 0
-        ).toFixed(1)}% · ` +
-        `vote ${predictionVotes}/${predictionVoteWindow} · ` +
-        `raw ${predictionRawLabel ?? "--"} ` +
-        `${Number(
-          predictionRawConfidencePercent ?? 0
-        ).toFixed(1)}% · ` +
-        `margin ${Number(
-          predictionRawMarginPercent ?? 0
-        ).toFixed(1)}% · ` +
-        `inference ${predictionInferenceMs ?? "--"} ms.`
-      );
-    }
+  const getStatusMessage =
+    () => {
+      if (
+        segmentStatus ===
+        "recording"
+      ) {
+        return (
+          `Recording gesture #`
+          +
+          `${segmentId ?? "--"} · `
+          +
+          `${segmentSourceFrames} frame · `
+          +
+          `motion ${Number(
+            segmentMotionEma ?? 0
+          ).toFixed(4)} · `
+          +
+          `still ${segmentStillFrames}/`
+          +
+          `${segmentThresholds
+            ?.endStillFrames ?? 6}.`
+        );
+      }
 
-    if (
-      predictionStatus ===
-      "holding" &&
-      hasStablePrediction
-    ) {
-      return (
-        `Menahan hasil ${predictionLabel} ` +
-        `${Number(
-          predictionConfidencePercent ?? 0
-        ).toFixed(1)}% · ` +
-        `raw sekarang ${predictionRawLabel ?? "--"} ` +
-        `${Number(
-          predictionRawConfidencePercent ?? 0
-        ).toFixed(1)}% · ` +
-        `vote ${predictionVotes}/${predictionVoteWindow}.`
-      );
-    }
 
-    if (
-      predictionStatus ===
-      "stabilizing"
-    ) {
-      return (
-        `Stabilisasi · ` +
-        `raw ${predictionRawLabel ?? "--"} ` +
-        `${Number(
-          predictionRawConfidencePercent ?? 0
-        ).toFixed(1)}% · ` +
-        `margin ${Number(
-          predictionRawMarginPercent ?? 0
-        ).toFixed(1)}% · ` +
-        `candidate ${
-          predictionCandidateValid
-            ? "valid"
-            : "ditolak"
-        } · ` +
-        `vote ${predictionVotes}/${predictionRequiredVotes} · ` +
-        `threshold conf ≥` +
-        `${Number(
-          predictionThresholds
-            ?.minConfidencePercent ??
-          70
-        ).toFixed(0)}% · ` +
-        `margin ≥` +
-        `${Number(
-          predictionThresholds
-            ?.minMarginPercent ??
-          10
-        ).toFixed(0)}% · ` +
-        `reason ${predictionReason}.`
-      );
-    }
+      if (
+        segmentStatus ===
+        "analyzing"
+      ) {
+        return (
+          "Gesture selesai · "
+          +
+          "melakukan uniform temporal sampling "
+          +
+          "dan inference TorchScript."
+        );
+      }
 
-    if (
-      predictionStatus ===
-      "waiting_for_hand"
-    ) {
-      return (
-        `Sequence 48/48 siap · ` +
-        `tangan pada window ` +
-        `${predictionHandPresentFrames ?? 0}/48 frame · ` +
-        `menunggu tangan terdeteksi.`
-      );
-    }
 
-    if (
-      predictionStatus ===
-      "model_not_loaded"
-    ) {
-      return (
-        "Model TorchScript tidak aktif. " +
-        "Periksa backend model runtime."
-      );
-    }
+      if (
+        segmentStatus ===
+        "cooldown"
+        &&
+        hasAcceptedWord
+      ) {
+        return (
+          `Accepted · `
+          +
+          `${predictionLabel} `
+          +
+          `${Number(
+            predictionConfidencePercent
+          ).toFixed(1)}% · `
+          +
+          `margin ${Number(
+            predictionMarginPercent
+          ).toFixed(1)}% · `
+          +
+          `${predictionSourceFrames} source frame `
+          +
+          `→ ${predictionSampledFrames} sampled · `
+          +
+          `${predictionUniqueSampledFrames} unique · `
+          +
+          `build ${Number(
+            predictionSequenceBuildMs ?? 0
+          ).toFixed(2)} ms · `
+          +
+          `infer ${predictionInferenceMs ?? "--"} ms · `
+          +
+          `end ${predictionEndReason}.`
+        );
+      }
 
-    if (sequenceReady) {
-      return (
-        `Sequence siap · ` +
-        `Hand ${sequenceShapes.hand.join("×")} · ` +
-        `Pose ${sequenceShapes.pose.join("×")} · ` +
-        `FaceHead ${sequenceShapes.facehead.join("×")} · ` +
-        `Multi ${sequenceShapes.multimodal.join("×")} · ` +
-        `prep ${sequencePreprocessingMs ?? "--"} ms.`
-      );
-    }
 
-    if (hasVisionData) {
-      return (
-        `Vision aktif · ` +
-        `frame ${lastFrameId} · ` +
-        `sequence ${sequenceCount}/${sequenceTarget} · ` +
-        `Hand ${totalHandLandmarks} · ` +
-        `Body ${totalPoseLandmarks} · ` +
-        `Face ${totalFaceLandmarks} · ` +
-        `vision ${processingMs ?? "--"} ms.`
-      );
-    }
+      if (
+        segmentStatus ===
+        "cooldown"
+        &&
+        predictionStatus ===
+        "uncertain"
+      ) {
+        return (
+          `Prediction ditolak · `
+          +
+          `top-1 ${predictionLabel ?? "--"} `
+          +
+          `${Number(
+            predictionConfidencePercent ?? 0
+          ).toFixed(1)}% · `
+          +
+          `margin ${Number(
+            predictionMarginPercent ?? 0
+          ).toFixed(1)}% · `
+          +
+          `minimum confidence `
+          +
+          `${Number(
+            predictionThresholds
+              ?.minConfidencePercent ??
+            70
+          ).toFixed(0)}% · `
+          +
+          `minimum margin `
+          +
+          `${Number(
+            predictionThresholds
+              ?.minMarginPercent ??
+            10
+          ).toFixed(0)}%.`
+        );
+      }
 
-    if (isStreaming) {
-      return (
-        `Frame kamera dikirim ke backend · ` +
-        `${sentFrames} sent · ` +
-        `${receivedFrames} diterima · ` +
-        `${lastFrameBytes} byte.`
-      );
-    }
 
-    if (
-      backendStatus ===
-      "checking"
-    ) {
-      return (
-        "Sedang memeriksa koneksi " +
-        "backend FastAPI..."
-      );
-    }
+      if (
+        predictionStatus ===
+        "insufficient_hand"
+      ) {
+        return (
+          "Gesture selesai tetapi landmark tangan "
+          +
+          "tidak cukup untuk inference yang valid."
+        );
+      }
 
-    if (
-      effectiveBackendOnline
-    ) {
-      return (
-        "Backend FastAPI terhubung. " +
-        "Aktifkan kamera."
-      );
-    }
 
-    return (
-      "Backend tidak terhubung. " +
-      "Jalankan FastAPI terlebih dahulu."
-    );
-  };
+      if (
+        predictionStatus ===
+        "model_not_loaded"
+      ) {
+        return (
+          "Model TorchScript tidak aktif."
+        );
+      }
+
+
+      if (
+        segmentStatus ===
+        "waiting"
+      ) {
+        return (
+          `Segmenter siap · `
+          +
+          `motion ${Number(
+            segmentMotionEma ?? 0
+          ).toFixed(4)} · `
+          +
+          `start ≥${Number(
+            segmentThresholds
+              ?.startMotion ??
+            0.010
+          ).toFixed(4)} · `
+          +
+          `gerakkan tangan untuk memulai satu gesture.`
+        );
+      }
+
+
+      if (
+        hasVisionData
+      ) {
+        return (
+          `Vision aktif · `
+          +
+          `frame ${lastFrameId} · `
+          +
+          `Hand ${totalHandLandmarks} · `
+          +
+          `Body ${totalPoseLandmarks} · `
+          +
+          `Face ${totalFaceLandmarks} · `
+          +
+          `vision ${processingMs ?? "--"} ms · `
+          +
+          `pipeline ${pipelineMs ?? "--"} ms.`
+        );
+      }
+
+
+      if (
+        isStreaming
+      ) {
+        return (
+          `Frame kamera dikirim · `
+          +
+          `${sentFrames} sent · `
+          +
+          `${receivedFrames} diterima · `
+          +
+          `${lastFrameBytes} byte.`
+        );
+      }
+
+
+      if (
+        effectiveBackendOnline
+      ) {
+        return (
+          "Backend siap. Aktifkan kamera."
+        );
+      }
+
+
+      return (
+        "Backend tidak terhubung."
+      );
+    };
 
 
   /* =========================
      WORKSPACE STATUS
   ========================= */
 
-  const getWorkspaceStatus = () => {
-    if (
-      predictionStatus ===
-      "stable"
-    ) {
-      return "AI Stable";
-    }
+  const getWorkspaceStatus =
+    () => {
+      if (
+        segmentStatus ===
+        "recording"
+      ) {
+        return (
+          "Recording Gesture"
+        );
+      }
 
-    if (
-      predictionStatus ===
-        "holding" &&
-      hasStablePrediction
-    ) {
-      return "AI Holding";
-    }
 
-    if (
-      predictionStatus ===
-      "stabilizing"
-    ) {
-      return "AI Stabilizing";
-    }
+      if (
+        segmentStatus ===
+        "analyzing"
+      ) {
+        return (
+          "AI Analyzing"
+        );
+      }
 
-    if (sequenceReady) {
-      return "Sequence Ready";
-    }
 
-    if (hasVisionData) {
-      return "Vision Active";
-    }
+      if (
+        segmentStatus ===
+        "cooldown"
+        &&
+        hasAcceptedWord
+      ) {
+        return (
+          "Word Accepted"
+        );
+      }
 
-    if (isStreaming) {
-      return "Frame Streaming";
-    }
 
-    return "Frontend Ready";
-  };
+      if (
+        segmentStatus ===
+        "cooldown"
+      ) {
+        return (
+          "Rearming"
+        );
+      }
+
+
+      if (
+        hasVisionData
+      ) {
+        return (
+          "AI Ready"
+        );
+      }
+
+
+      if (
+        isStreaming
+      ) {
+        return (
+          "Frame Streaming"
+        );
+      }
+
+
+      return (
+        "Frontend Ready"
+      );
+    };
 
 
   /* =========================
      CAMERA BADGE
   ========================= */
 
-  const getCameraBadge = () => {
-    if (
-      predictionStatus ===
-      "stable"
-    ) {
-      return "STABLE";
-    }
+  const getCameraBadge =
+    () => {
+      if (
+        segmentStatus ===
+        "recording"
+      ) {
+        return "REC";
+      }
 
-    if (
-      predictionStatus ===
-      "holding"
-    ) {
-      return "HOLD";
-    }
 
-    if (
-      predictionStatus ===
-      "stabilizing"
-    ) {
-      return "AI";
-    }
+      if (
+        segmentStatus ===
+        "analyzing"
+      ) {
+        return "AI";
+      }
 
-    if (sequenceReady) {
-      return "SEQUENCE";
-    }
 
-    if (hasVisionData) {
-      return "VISION";
-    }
+      if (
+        segmentStatus ===
+        "cooldown"
+        &&
+        hasAcceptedWord
+      ) {
+        return "ACCEPT";
+      }
 
-    if (isStreaming) {
-      return "STREAMING";
-    }
 
-    return "LIVE";
-  };
+      if (
+        segmentStatus ===
+        "waiting"
+      ) {
+        return "READY";
+      }
+
+
+      if (
+        hasVisionData
+      ) {
+        return "VISION";
+      }
+
+
+      return "LIVE";
+    };
 
 
   return (
@@ -701,9 +923,8 @@ function RecognitionPage() {
           </h2>
 
           <p>
-            Gunakan kamera untuk mengenali
-            gerakan Bahasa Isyarat Indonesia
-            secara real-time.
+            Setiap gesture direkam sebagai satu
+            segment isolated sebelum dianalisis model.
           </p>
         </div>
 
@@ -736,14 +957,16 @@ function RecognitionPage() {
 
             <div className="camera-status">
               <span
-                className={`camera-status-dot ${
-                  isCameraActive
-                    ? "online"
-                    : cameraStatus ===
-                        "error"
-                      ? "error"
-                      : "offline"
-                }`}
+                className={
+                  `camera-status-dot ${
+                    isCameraActive
+                      ? "online"
+                      : cameraStatus ===
+                          "error"
+                        ? "error"
+                        : "offline"
+                  }`
+                }
               />
 
               {getCameraStatusText()}
@@ -756,11 +979,13 @@ function RecognitionPage() {
           <div className="camera-preview">
             <video
               ref={videoRef}
-              className={`camera-video ${
-                isCameraActive
-                  ? "visible"
-                  : ""
-              }`}
+              className={
+                `camera-video ${
+                  isCameraActive
+                    ? "visible"
+                    : ""
+                }`
+              }
               autoPlay
               playsInline
               muted
@@ -819,8 +1044,8 @@ function RecognitionPage() {
                     </strong>
 
                     <p>
-                      Tekan tombol Mulai Kamera
-                      untuk mengaktifkan webcam.
+                      Tekan Mulai Kamera untuk
+                      mengaktifkan webcam.
                     </p>
                   </>
                 )}
@@ -891,7 +1116,8 @@ function RecognitionPage() {
               className="recognition-control primary"
               onClick={startCamera}
               disabled={
-                isCameraActive ||
+                isCameraActive
+                ||
                 cameraStatus ===
                   "requesting"
               }
@@ -912,7 +1138,9 @@ function RecognitionPage() {
               type="button"
               className="recognition-control secondary"
               onClick={stopCamera}
-              disabled={!isCameraActive}
+              disabled={
+                !isCameraActive
+              }
             >
               <Square
                 size={15}
@@ -1010,13 +1238,11 @@ function RecognitionPage() {
 
               <div>
                 <span>
-                  Sequence
+                  Gesture
                 </span>
 
                 <strong>
-                  {displaySequenceCount}
-                  {" / "}
-                  {sequenceTarget}
+                  {getGestureMetric()}
                 </strong>
               </div>
             </div>
@@ -1025,7 +1251,8 @@ function RecognitionPage() {
             <div className="prediction-metric">
               <div
                 className={
-                  `metric-icon ` +
+                  `metric-icon `
+                  +
                   `backend-${effectiveBackendStatus}`
                 }
               >
@@ -1063,11 +1290,12 @@ function RecognitionPage() {
             </div>
 
             <strong>
-              v1 · Words
+              v1 · Isolated Words
             </strong>
 
             <p>
-              Model pengenalan kata BISINDO.
+              Satu gesture utuh disampling
+              menjadi 48 frame sebelum inference.
             </p>
           </div>
 
@@ -1075,11 +1303,13 @@ function RecognitionPage() {
           {/* STATUS */}
 
           <div
-            className={`recognition-warning ${
-              hasVisionData
-                ? "backend-connected"
-                : ""
-            }`}
+            className={
+              `recognition-warning ${
+                hasVisionData
+                  ? "backend-connected"
+                  : ""
+              }`
+            }
           >
             <CircleAlert
               size={16}
@@ -1116,9 +1346,15 @@ function RecognitionPage() {
               strokeWidth={1.7}
             />
 
-            {hasStablePrediction
-              ? "Stable Word"
-              : "Waiting"}
+            {segmentStatus ===
+            "recording"
+              ? "Recording"
+              : segmentStatus ===
+                  "analyzing"
+                ? "Analyzing"
+                : hasAcceptedWord
+                  ? "Word Ready"
+                  : "Waiting"}
           </div>
         </div>
 
@@ -1130,17 +1366,47 @@ function RecognitionPage() {
           />
 
           <p>
-            {hasStablePrediction
+            {hasAcceptedWord
               ? (
-                  `Prediksi kata stabil: ` +
-                  `${predictionLabel}. ` +
-                  `Penyusunan menjadi kalimat ` +
-                  `akan diaktifkan pada tahap berikutnya.`
+                  `Kata terakhir: `
+                  +
+                  `${predictionLabel}. `
+                  +
+                  `Segment #`
+                  +
+                  `${predictionSegmentId ?? "--"} `
+                  +
+                  `menggunakan `
+                  +
+                  `${predictionSourceFrames} `
+                  +
+                  `source frame → 48 frame. `
+                  +
+                  `Penyusunan beberapa kata `
+                  +
+                  `menjadi kalimat akan `
+                  +
+                  `diaktifkan setelah segmentasi stabil.`
                 )
-              : (
-                  "Hasil pengenalan akan disusun " +
-                  "dan ditampilkan di sini."
-                )}
+              : hasPredictionResult &&
+                predictionStatus ===
+                  "uncertain"
+                ? (
+                    `Gesture terakhir belum `
+                    +
+                    `cukup yakin untuk diterima. `
+                    +
+                    `Top kandidat: `
+                    +
+                    `${getTop3Text()}.`
+                  )
+                : (
+                    "Lakukan satu gesture BISINDO, "
+                    +
+                    "kemudian diam sebentar hingga "
+                    +
+                    "gesture selesai direkam."
+                  )}
           </p>
         </div>
       </section>

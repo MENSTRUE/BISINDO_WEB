@@ -24,17 +24,41 @@ const EMPTY_COUNTS = {
 };
 
 
-const EMPTY_SEQUENCE = {
-  count: 0,
-  target: 48,
-  ready: false,
-  preprocessingMs: null,
+const EMPTY_SEGMENT = {
+  status: "waiting",
+  reason: "waiting_for_gesture",
 
-  shapes: {
-    hand: [0, 134],
-    pose: [0, 36],
-    facehead: [0, 52],
-    multimodal: [0, 222],
+  segmentId: null,
+
+  sourceFrames: 0,
+  preRollFrames: 0,
+
+  motionScore: 0,
+  motionEma: 0,
+  peakMotion: 0,
+
+  startCounter: 0,
+  stillFrames: 0,
+  noHandFrames: 0,
+  rearmStillFrames: 0,
+
+  resultEvent: false,
+
+  thresholds: {
+    startMotion: 0.010,
+    endMotion: 0.0045,
+
+    startConsecutiveFrames: 2,
+    endStillFrames: 6,
+
+    preRollFrames: 5,
+    postRollFrames: 3,
+
+    minSegmentFrames: 12,
+    maxSegmentFrames: 60,
+
+    rearmMotion: 0.0055,
+    rearmStillFrames: 4,
   },
 };
 
@@ -42,10 +66,15 @@ const EMPTY_SEQUENCE = {
 const EMPTY_PREDICTION = {
   status: "idle",
 
+  rawStatus: "idle",
+
   accepted: false,
 
-  label: null,
+  resultEvent: false,
+  acceptedEvent: false,
+
   classId: null,
+  label: null,
 
   confidence: 0,
   confidencePercent: 0,
@@ -53,36 +82,27 @@ const EMPTY_PREDICTION = {
   margin: 0,
   marginPercent: 0,
 
-  votes: 0,
-  requiredVotes: 3,
-  windowSize: 0,
-  voteWindow: 5,
-
-  rawStatus: "idle",
-  rawLabel: null,
-  rawClassId: null,
-
-  rawConfidence: 0,
-  rawConfidencePercent: 0,
-
-  rawMargin: 0,
-  rawMarginPercent: 0,
-
-  candidateValid: false,
-
-  reason: "idle",
-
-  inferenceMs: null,
+  top3: [],
 
   handPresentFrames: 0,
 
-  top3: [],
+  inferenceMs: null,
+
+  segmentId: null,
+
+  sourceFrames: 0,
+  sampledFrames: 48,
+  uniqueSampledFrames: 0,
+
+  sequenceBuildMs: 0,
+
+  endReason: null,
+
+  peakMotion: 0,
 
   thresholds: {
     minConfidencePercent: 70,
     minMarginPercent: 10,
-    minVotes: 3,
-    voteWindow: 5,
   },
 };
 
@@ -117,16 +137,22 @@ function useRealtimeLandmarks() {
 
 
   const [
+    pipelineMs,
+    setPipelineMs,
+  ] = useState(null);
+
+
+  const [
     lastFrameId,
     setLastFrameId,
   ] = useState(null);
 
 
   const [
-    sequence,
-    setSequence,
+    segment,
+    setSegment,
   ] = useState(
-    EMPTY_SEQUENCE,
+    EMPTY_SEGMENT,
   );
 
 
@@ -155,7 +181,7 @@ function useRealtimeLandmarks() {
        LANDMARKS
     ========================= */
 
-    const nextLandmarks = {
+    setLandmarks({
       leftHand:
         Array.isArray(
           lastMessage
@@ -199,12 +225,7 @@ function useRealtimeLandmarks() {
               .landmarks
               .face
           : [],
-    };
-
-
-    setLandmarks(
-      nextLandmarks,
-    );
+    });
 
 
     /* =========================
@@ -216,136 +237,232 @@ function useRealtimeLandmarks() {
         Number(
           lastMessage
             .counts
-            ?.left_hand ?? 0,
+            ?.left_hand ?? 0
         ),
 
       right_hand:
         Number(
           lastMessage
             .counts
-            ?.right_hand ?? 0,
+            ?.right_hand ?? 0
         ),
 
       pose:
         Number(
           lastMessage
             .counts
-            ?.pose ?? 0,
+            ?.pose ?? 0
         ),
 
       face:
         Number(
           lastMessage
             .counts
-            ?.face ?? 0,
+            ?.face ?? 0
         ),
     });
 
 
     /* =========================
-       VISION
+       PERFORMANCE
     ========================= */
 
     setProcessingMs(
       Number(
         lastMessage
-          .processing_ms ?? 0,
-      ),
+          .processing_ms ?? 0
+      )
+    );
+
+
+    setPipelineMs(
+      Number(
+        lastMessage
+          .pipeline_ms ?? 0
+      )
     );
 
 
     setLastFrameId(
       Number(
         lastMessage
-          .frame_id ?? 0,
-      ),
+          .frame_id ?? 0
+      )
     );
 
 
     /* =========================
-       SEQUENCE
+       SEGMENT
     ========================= */
 
-    const nextSequence =
-      lastMessage.sequence;
+    const nextSegment =
+      lastMessage.segment;
 
 
-    if (nextSequence) {
-      setSequence({
-        count:
+    if (nextSegment) {
+      setSegment({
+        status:
+          nextSegment
+            .status ??
+          "waiting",
+
+        reason:
+          nextSegment
+            .reason ??
+          "waiting_for_gesture",
+
+        segmentId:
+          nextSegment
+            .segment_id ??
+          null,
+
+        sourceFrames:
           Number(
-            nextSequence
-              .count ?? 0,
+            nextSegment
+              .source_frames ?? 0
           ),
 
-        target:
+        preRollFrames:
           Number(
-            nextSequence
-              .target ?? 48,
+            nextSegment
+              .pre_roll_frames ?? 0
           ),
 
-        ready:
+        motionScore:
+          Number(
+            nextSegment
+              .motion_score ?? 0
+          ),
+
+        motionEma:
+          Number(
+            nextSegment
+              .motion_ema ?? 0
+          ),
+
+        peakMotion:
+          Number(
+            nextSegment
+              .peak_motion ?? 0
+          ),
+
+        startCounter:
+          Number(
+            nextSegment
+              .start_counter ?? 0
+          ),
+
+        stillFrames:
+          Number(
+            nextSegment
+              .still_frames ?? 0
+          ),
+
+        noHandFrames:
+          Number(
+            nextSegment
+              .no_hand_frames ?? 0
+          ),
+
+        rearmStillFrames:
+          Number(
+            nextSegment
+              .rearm_still_frames ?? 0
+          ),
+
+        resultEvent:
           Boolean(
-            nextSequence.ready
+            nextSegment
+              .result_event
           ),
 
-        preprocessingMs:
-          Number(
-            nextSequence
-              .preprocessing_ms ?? 0,
-          ),
+        thresholds: {
+          startMotion:
+            Number(
+              nextSegment
+                .thresholds
+                ?.start_motion ??
+              0.010
+            ),
 
-        shapes: {
-          hand:
-            Array.isArray(
-              nextSequence
-                .shapes
-                ?.hand
-            )
-              ? nextSequence
-                  .shapes
-                  .hand
-              : [0, 134],
+          endMotion:
+            Number(
+              nextSegment
+                .thresholds
+                ?.end_motion ??
+              0.0045
+            ),
 
-          pose:
-            Array.isArray(
-              nextSequence
-                .shapes
-                ?.pose
-            )
-              ? nextSequence
-                  .shapes
-                  .pose
-              : [0, 36],
+          startConsecutiveFrames:
+            Number(
+              nextSegment
+                .thresholds
+                ?.start_consecutive_frames ??
+              2
+            ),
 
-          facehead:
-            Array.isArray(
-              nextSequence
-                .shapes
-                ?.facehead
-            )
-              ? nextSequence
-                  .shapes
-                  .facehead
-              : [0, 52],
+          endStillFrames:
+            Number(
+              nextSegment
+                .thresholds
+                ?.end_still_frames ??
+              6
+            ),
 
-          multimodal:
-            Array.isArray(
-              nextSequence
-                .shapes
-                ?.multimodal
-            )
-              ? nextSequence
-                  .shapes
-                  .multimodal
-              : [0, 222],
+          preRollFrames:
+            Number(
+              nextSegment
+                .thresholds
+                ?.pre_roll_frames ??
+              5
+            ),
+
+          postRollFrames:
+            Number(
+              nextSegment
+                .thresholds
+                ?.post_roll_frames ??
+              3
+            ),
+
+          minSegmentFrames:
+            Number(
+              nextSegment
+                .thresholds
+                ?.min_segment_frames ??
+              12
+            ),
+
+          maxSegmentFrames:
+            Number(
+              nextSegment
+                .thresholds
+                ?.max_segment_frames ??
+              60
+            ),
+
+          rearmMotion:
+            Number(
+              nextSegment
+                .thresholds
+                ?.rearm_motion ??
+              0.0055
+            ),
+
+          rearmStillFrames:
+            Number(
+              nextSegment
+                .thresholds
+                ?.rearm_still_frames ??
+              4
+            ),
         },
       });
     }
 
 
     /* =========================
-       STABILIZED PREDICTION
+       PREDICTION
     ========================= */
 
     const nextPrediction =
@@ -359,140 +476,61 @@ function useRealtimeLandmarks() {
             .status ??
           "idle",
 
+        rawStatus:
+          nextPrediction
+            .raw_status ??
+          "idle",
+
         accepted:
           Boolean(
-            nextPrediction.accepted
+            nextPrediction
+              .accepted
           ),
 
-        label:
-          nextPrediction
-            .label ??
-          null,
+        resultEvent:
+          Boolean(
+            nextPrediction
+              .result_event
+          ),
+
+        acceptedEvent:
+          Boolean(
+            nextPrediction
+              .accepted_event
+          ),
 
         classId:
           nextPrediction
             .class_id ??
           null,
 
+        label:
+          nextPrediction
+            .label ??
+          null,
+
         confidence:
           Number(
             nextPrediction
-              .confidence ?? 0,
+              .confidence ?? 0
           ),
 
         confidencePercent:
           Number(
             nextPrediction
-              .confidence_percent ??
-            0,
+              .confidence_percent ?? 0
           ),
 
         margin:
           Number(
             nextPrediction
-              .margin ?? 0,
+              .margin ?? 0
           ),
 
         marginPercent:
           Number(
             nextPrediction
-              .margin_percent ?? 0,
-          ),
-
-        votes:
-          Number(
-            nextPrediction
-              .votes ?? 0,
-          ),
-
-        requiredVotes:
-          Number(
-            nextPrediction
-              .required_votes ?? 3,
-          ),
-
-        windowSize:
-          Number(
-            nextPrediction
-              .window_size ?? 0,
-          ),
-
-        voteWindow:
-          Number(
-            nextPrediction
-              .vote_window ?? 5,
-          ),
-
-        rawStatus:
-          nextPrediction
-            .raw_status ??
-          "idle",
-
-        rawLabel:
-          nextPrediction
-            .raw_label ??
-          null,
-
-        rawClassId:
-          nextPrediction
-            .raw_class_id ??
-          null,
-
-        rawConfidence:
-          Number(
-            nextPrediction
-              .raw_confidence ?? 0,
-          ),
-
-        rawConfidencePercent:
-          Number(
-            nextPrediction
-              .raw_confidence_percent ??
-            0,
-          ),
-
-        rawMargin:
-          Number(
-            nextPrediction
-              .raw_margin ?? 0,
-          ),
-
-        rawMarginPercent:
-          Number(
-            nextPrediction
-              .raw_margin_percent ??
-            0,
-          ),
-
-        candidateValid:
-          Boolean(
-            nextPrediction
-              .candidate_valid
-          ),
-
-        reason:
-          nextPrediction
-            .reason ??
-          "idle",
-
-        inferenceMs:
-          nextPrediction
-            .inference_ms === null
-            ||
-            nextPrediction
-              .inference_ms ===
-              undefined
-              ? null
-              : Number(
-                  nextPrediction
-                    .inference_ms
-                ),
-
-        handPresentFrames:
-          Number(
-            nextPrediction
-              .hand_present_frames ??
-            0,
+              .margin_percent ?? 0
           ),
 
         top3:
@@ -502,13 +540,70 @@ function useRealtimeLandmarks() {
             ? nextPrediction.top3
             : [],
 
+        handPresentFrames:
+          Number(
+            nextPrediction
+              .hand_present_frames ?? 0
+          ),
+
+        inferenceMs:
+          nextPrediction
+            .inference_ms === null ||
+          nextPrediction
+            .inference_ms === undefined
+            ? null
+            : Number(
+                nextPrediction
+                  .inference_ms
+              ),
+
+        segmentId:
+          nextPrediction
+            .segment_id ??
+          null,
+
+        sourceFrames:
+          Number(
+            nextPrediction
+              .source_frames ?? 0
+          ),
+
+        sampledFrames:
+          Number(
+            nextPrediction
+              .sampled_frames ?? 48
+          ),
+
+        uniqueSampledFrames:
+          Number(
+            nextPrediction
+              .unique_sampled_frames ?? 0
+          ),
+
+        sequenceBuildMs:
+          Number(
+            nextPrediction
+              .sequence_build_ms ?? 0
+          ),
+
+        endReason:
+          nextPrediction
+            .end_reason ??
+          null,
+
+        peakMotion:
+          Number(
+            nextPrediction
+              .peak_motion ?? 0
+          ),
+
         thresholds: {
           minConfidencePercent:
             Number(
               nextPrediction
                 .thresholds
                 ?.min_confidence_percent ??
-              70,
+              70
             ),
 
           minMarginPercent:
@@ -516,38 +611,21 @@ function useRealtimeLandmarks() {
               nextPrediction
                 .thresholds
                 ?.min_margin_percent ??
-              10,
-            ),
-
-          minVotes:
-            Number(
-              nextPrediction
-                .thresholds
-                ?.min_votes ??
-              3,
-            ),
-
-          voteWindow:
-            Number(
-              nextPrediction
-                .thresholds
-                ?.vote_window ??
-              5,
+              10
             ),
         },
       });
     }
 
-
-    else if (
-      !nextSequence?.ready
-    ) {
+    else {
       setPrediction(
         EMPTY_PREDICTION,
       );
     }
 
-  }, [lastMessage]);
+  }, [
+    lastMessage,
+  ]);
 
 
   /* =========================
@@ -563,8 +641,8 @@ function useRealtimeLandmarks() {
     }
 
 
-    setSequence(
-      EMPTY_SEQUENCE,
+    setSegment(
+      EMPTY_SEGMENT,
     );
 
 
@@ -572,11 +650,13 @@ function useRealtimeLandmarks() {
       EMPTY_PREDICTION,
     );
 
-  }, [lastMessage]);
+  }, [
+    lastMessage,
+  ]);
 
 
   /* =========================
-     DISCONNECTED
+     DISCONNECT
   ========================= */
 
   useEffect(() => {
@@ -597,11 +677,13 @@ function useRealtimeLandmarks() {
 
     setProcessingMs(null);
 
+    setPipelineMs(null);
+
     setLastFrameId(null);
 
 
-    setSequence(
-      EMPTY_SEQUENCE,
+    setSegment(
+      EMPTY_SEGMENT,
     );
 
 
@@ -609,7 +691,9 @@ function useRealtimeLandmarks() {
       EMPTY_PREDICTION,
     );
 
-  }, [isConnected]);
+  }, [
+    isConnected,
+  ]);
 
 
   return {
@@ -617,34 +701,81 @@ function useRealtimeLandmarks() {
     counts,
 
     processingMs,
+    pipelineMs,
     lastFrameId,
 
-    sequenceCount:
-      sequence.count,
 
-    sequenceTarget:
-      sequence.target,
+    /* =====================
+       SEGMENT
+    ===================== */
 
-    sequenceReady:
-      sequence.ready,
+    segmentStatus:
+      segment.status,
 
-    sequencePreprocessingMs:
-      sequence.preprocessingMs,
+    segmentReason:
+      segment.reason,
 
-    sequenceShapes:
-      sequence.shapes,
+    segmentId:
+      segment.segmentId,
+
+    segmentSourceFrames:
+      segment.sourceFrames,
+
+    segmentPreRollFrames:
+      segment.preRollFrames,
+
+    segmentMotionScore:
+      segment.motionScore,
+
+    segmentMotionEma:
+      segment.motionEma,
+
+    segmentPeakMotion:
+      segment.peakMotion,
+
+    segmentStartCounter:
+      segment.startCounter,
+
+    segmentStillFrames:
+      segment.stillFrames,
+
+    segmentNoHandFrames:
+      segment.noHandFrames,
+
+    segmentRearmStillFrames:
+      segment.rearmStillFrames,
+
+    segmentResultEvent:
+      segment.resultEvent,
+
+    segmentThresholds:
+      segment.thresholds,
+
+
+    /* =====================
+       PREDICTION
+    ===================== */
 
     predictionStatus:
       prediction.status,
 
+    predictionRawStatus:
+      prediction.rawStatus,
+
     predictionAccepted:
       prediction.accepted,
 
-    predictionLabel:
-      prediction.label,
+    predictionResultEvent:
+      prediction.resultEvent,
+
+    predictionAcceptedEvent:
+      prediction.acceptedEvent,
 
     predictionClassId:
       prediction.classId,
+
+    predictionLabel:
+      prediction.label,
 
     predictionConfidence:
       prediction.confidence,
@@ -652,56 +783,41 @@ function useRealtimeLandmarks() {
     predictionConfidencePercent:
       prediction.confidencePercent,
 
+    predictionMargin:
+      prediction.margin,
+
     predictionMarginPercent:
       prediction.marginPercent,
 
-    predictionVotes:
-      prediction.votes,
-
-    predictionRequiredVotes:
-      prediction.requiredVotes,
-
-    predictionWindowSize:
-      prediction.windowSize,
-
-    predictionVoteWindow:
-      prediction.voteWindow,
-
-    predictionRawStatus:
-      prediction.rawStatus,
-
-    predictionRawLabel:
-      prediction.rawLabel,
-
-    predictionRawClassId:
-      prediction.rawClassId,
-
-    predictionRawConfidence:
-      prediction.rawConfidence,
-
-    predictionRawConfidencePercent:
-      prediction.rawConfidencePercent,
-
-    predictionRawMargin:
-      prediction.rawMargin,
-
-    predictionRawMarginPercent:
-      prediction.rawMarginPercent,
-
-    predictionCandidateValid:
-      prediction.candidateValid,
-
-    predictionReason:
-      prediction.reason,
-
-    predictionInferenceMs:
-      prediction.inferenceMs,
+    predictionTop3:
+      prediction.top3,
 
     predictionHandPresentFrames:
       prediction.handPresentFrames,
 
-    predictionTop3:
-      prediction.top3,
+    predictionInferenceMs:
+      prediction.inferenceMs,
+
+    predictionSegmentId:
+      prediction.segmentId,
+
+    predictionSourceFrames:
+      prediction.sourceFrames,
+
+    predictionSampledFrames:
+      prediction.sampledFrames,
+
+    predictionUniqueSampledFrames:
+      prediction.uniqueSampledFrames,
+
+    predictionSequenceBuildMs:
+      prediction.sequenceBuildMs,
+
+    predictionEndReason:
+      prediction.endReason,
+
+    predictionPeakMotion:
+      prediction.peakMotion,
 
     predictionThresholds:
       prediction.thresholds,
