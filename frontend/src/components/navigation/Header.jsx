@@ -7,37 +7,106 @@ import {
 
 import useBackendHealth from "../../hooks/useBackendHealth";
 
+import {
+  useRealtime,
+} from "../../contexts/RealtimeContext";
+
 import "../../styles/header.css";
 
+
 function Header() {
+  /* =========================
+     REST BACKEND
+  ========================= */
+
   const {
-    status,
     health,
-    isOnline,
-    isChecking,
+    isOnline: isBackendOnline,
+    isChecking: isBackendChecking,
   } = useBackendHealth();
 
+
+  /* =========================
+     WEBSOCKET
+  ========================= */
+
+  const {
+    status: realtimeStatus,
+    isConnected:
+      isRealtimeConnected,
+  } = useRealtime();
+
+
+  /* =========================
+     UI STATE
+  ========================= */
+
+  const getConnectionState = () => {
+    if (isBackendChecking) {
+      return "checking";
+    }
+
+    if (!isBackendOnline) {
+      return "offline";
+    }
+
+    if (isRealtimeConnected) {
+      return "online";
+    }
+
+    if (
+      realtimeStatus ===
+      "connecting"
+    ) {
+      return "checking";
+    }
+
+    return "offline";
+  };
+
+
+  const connectionState =
+    getConnectionState();
+
+
   const ConnectionIcon =
-    isChecking
+    connectionState === "checking"
       ? LoaderCircle
-      : isOnline
+      : connectionState === "online"
         ? Wifi
         : WifiOff;
 
+
   const getConnectionText = () => {
-    if (isChecking) {
+    if (isBackendChecking) {
       return "Checking...";
     }
 
-    if (isOnline) {
-      return "Backend Online";
+    if (!isBackendOnline) {
+      return "Backend Offline";
     }
 
-    return "Backend Offline";
+    if (isRealtimeConnected) {
+      return "Realtime Online";
+    }
+
+    if (
+      realtimeStatus ===
+      "connecting"
+    ) {
+      return "Realtime Connecting";
+    }
+
+    return "Realtime Offline";
   };
+
 
   return (
     <header className="main-header">
+      {/* =========================
+          TITLE
+      ========================== */}
+
       <div className="header-title-group">
         <span className="header-eyebrow">
           Workspace
@@ -48,7 +117,14 @@ function Header() {
         </h1>
       </div>
 
+
+      {/* =========================
+          CONTROLS
+      ========================== */}
+
       <div className="header-controls">
+        {/* MODEL */}
+
         <div
           className="header-control-card"
           title="Model pengenalan aktif"
@@ -71,11 +147,19 @@ function Header() {
           </div>
         </div>
 
+
+        {/* CONNECTION */}
+
         <div
-          className={`header-control-card connection ${status}`}
+          className={
+            `header-control-card connection ${connectionState}`
+          }
           title={
             health
-              ? `${health.service} ${health.version}`
+              ? (
+                  `${health.service} ${health.version}` +
+                  ` · WebSocket ${realtimeStatus}`
+                )
               : "Status koneksi backend"
           }
         >
@@ -84,7 +168,8 @@ function Header() {
               size={16}
               strokeWidth={1.8}
               className={
-                isChecking
+                connectionState ===
+                "checking"
                   ? "connection-loading"
                   : ""
               }
@@ -98,7 +183,9 @@ function Header() {
 
             <strong>
               <span
-                className={`connection-dot ${status}`}
+                className={
+                  `connection-dot ${connectionState}`
+                }
               />
 
               {getConnectionText()}
@@ -109,5 +196,6 @@ function Header() {
     </header>
   );
 }
+
 
 export default Header;

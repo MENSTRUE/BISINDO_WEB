@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
+from app.api.realtime import router as realtime_router
+
 from app.core.config import (
     API_PREFIX,
     APP_NAME,
@@ -19,7 +21,6 @@ app = FastAPI(
 )
 
 
-# CORS untuk frontend React/Vite
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -37,6 +38,10 @@ app.include_router(
     prefix=API_PREFIX,
 )
 
+app.include_router(
+    realtime_router,
+)
+
 
 @app.get("/")
 async def root():
@@ -44,4 +49,5 @@ async def root():
         "service": APP_NAME,
         "version": APP_VERSION,
         "status": "running",
+        "realtime": "/ws/realtime",
     }
