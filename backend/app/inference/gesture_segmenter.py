@@ -5,65 +5,98 @@ import numpy as np
 
 
 # ============================================================
-# SEGMENTATION CONFIG
+# SEGMENTATION CONFIG V2
 #
 # Runtime heuristic.
 # BUKAN parameter training.
+#
+# Tuning berdasarkan log realtime:
+#
+# - false segment banyak di 13-15 frame
+# - idle/jitter sempat mencapai sekitar 0.010-0.012
+# - gesture valid berhasil di 20-41 frame
+# - END terlalu ketat sehingga pernah mencapai max_length
 # ============================================================
 
-# Beberapa frame sebelum motion terdeteksi
-# ikut dimasukkan ke gesture.
-PRE_ROLL_FRAMES = 5
+
+# Beberapa frame sebelum gesture benar-benar
+# terdeteksi ikut dimasukkan sebagai konteks awal.
+PRE_ROLL_FRAMES = 6
 
 
-# Setelah motion berhenti,
-# simpan sebagian tail supaya final pose
-# masih terlihat.
-POST_ROLL_FRAMES = 3
+# Sisakan sedikit final pose setelah motion berhenti.
+POST_ROLL_FRAMES = 4
 
 
-# Minimal panjang source gesture.
-MIN_SEGMENT_FRAMES = 12
+# Segment pendek seperti 13-15 frame
+# tidak langsung dianggap gesture valid.
+MIN_SEGMENT_FRAMES = 18
 
 
-# Safety kalau user tidak pernah berhenti.
-MAX_SEGMENT_FRAMES = 60
+# Safety maksimal.
+#
+# Dibuat sedikit lebih panjang daripada V1,
+# tetapi result max_length tidak boleh langsung
+# diterima sebagai kata valid.
+MAX_SEGMENT_FRAMES = 72
 
 
-# Motion harus cukup besar untuk start.
-START_MOTION_THRESHOLD = 0.010
+# Gerakan minimum untuk MULAI gesture.
+#
+# V1 = 0.010
+# Sekarang diperketat karena idle jitter
+# sempat mendekati ~0.012.
+START_MOTION_THRESHOLD = 0.015
 
 
-# Motion di bawah nilai ini dianggap diam.
-END_MOTION_THRESHOLD = 0.0045
+# Motion yang kita hitung sebagai
+# aktivitas nyata selama recording.
+ACTIVE_MOTION_THRESHOLD = 0.010
 
 
-# Start harus terlihat dua update berturut.
+# Gerakan di bawah nilai ini dianggap
+# cukup diam untuk mengakhiri gesture.
+#
+# V1 = 0.0045
+# Dibuat lebih toleran terhadap jitter MediaPipe.
+END_MOTION_THRESHOLD = 0.0075
+
+
+# Harus ada motion start berulang.
 START_CONSECUTIVE_FRAMES = 2
 
 
-# Diam sekian frame = gesture selesai.
-END_STILL_FRAMES = 6
+# Segment harus mengandung minimal
+# beberapa frame aktivitas nyata.
+MIN_ACTIVE_MOTION_FRAMES = 3
 
 
-# Tangan hilang beberapa frame juga
-# dianggap gesture selesai.
-NO_HAND_END_FRAMES = 3
+# Diam 5 frame berturut-turut
+# sekitar setengah detik pada ~10 FPS.
+END_STILL_FRAMES = 5
 
 
-# Setelah prediction selesai,
-# sistem harus stabil sebentar sebelum
-# membuka gesture berikutnya.
-REARM_MOTION_THRESHOLD = 0.0055
-REARM_STILL_FRAMES = 4
+# Kalau tangan benar-benar hilang,
+# gesture bisa selesai lebih cepat.
+NO_HAND_END_FRAMES = 2
 
 
-# EMA motion.
-MOTION_EMA_ALPHA = 0.65
+# Setelah satu hasil keluar,
+# tunggu kondisi cukup stabil sebelum
+# menerima gesture baru.
+REARM_MOTION_THRESHOLD = 0.008
+REARM_STILL_FRAMES = 3
 
 
-# Titik representatif tangan:
-# wrist + fingertips.
+# EMA untuk motion.
+MOTION_EMA_ALPHA = 0.60
+
+
+# Wrist + fingertips.
+#
+# Cukup representatif untuk menangkap:
+# - perpindahan tangan
+# - perubahan posisi jari utama
 MOTION_POINT_INDICES = (
     0,
     4,
@@ -76,10 +109,6 @@ MOTION_POINT_INDICES = (
 
 # ============================================================
 # RESULT ACCEPTANCE
-#
-# Satu gesture = satu inference.
-# Jadi kita pakai quality gate langsung,
-# bukan rolling voting.
 # ============================================================
 
 MIN_RESULT_CONFIDENCE = 0.70
@@ -95,22 +124,23 @@ def safe_float(
     default=0.0,
 ):
     try:
-        return float(
-            value
-        )
+        return float(value)
 
     except (
         TypeError,
         ValueError,
     ):
-        return float(
-            default
-        )
+        return float(default)
 
 
 def hand_to_motion_points(
     points,
 ):
+    """
+    Ambil titik tangan yang digunakan
+    untuk estimasi motion realtime.
+    """
+
     if not isinstance(
         points,
         list,
@@ -124,18 +154,16 @@ def hand_to_motion_points(
     output = []
 
 
-    for index in (
-        MOTION_POINT_INDICES
-    ):
-        point = (
-            points[index]
-        )
+    for index in MOTION_POINT_INDICES:
+        point = points[index]
+
 
         if not isinstance(
             point,
             dict,
         ):
             return None
+
 
         try:
             x = float(
@@ -184,6 +212,14 @@ def build_segment_result(
     segment_info,
     sequence_info,
 ):
+    """
+    Menggabungkan output model +
+    metadata hasil gesture segmentation.
+
+    Satu isolated gesture hanya melakukan
+    satu inference.
+    """
+
     raw_prediction = (
         raw_prediction
         if isinstance(
@@ -202,12 +238,10 @@ def build_segment_result(
     )
 
 
-    confidence = (
-        safe_float(
-            raw_prediction.get(
-                "confidence",
-                0.0,
-            )
+    confidence = safe_float(
+        raw_prediction.get(
+            "confidence",
+            0.0,
         )
     )
 
@@ -219,6 +253,10 @@ def build_segment_result(
         )
     )
 
+
+    # ========================================================
+    # TOP-1 vs TOP-2 MARGIN
+    # ========================================================
 
     second_confidence = 0.0
 
@@ -251,9 +289,47 @@ def build_segment_result(
     )
 
 
+    # ========================================================
+    # SEGMENT QUALITY
+    # ========================================================
+
+    end_reason = (
+        segment_info.get(
+            "end_reason",
+            "unknown",
+        )
+    )
+
+
+    segment_quality_valid = bool(
+        segment_info.get(
+            "quality_valid",
+            True,
+        )
+    )
+
+
+    # Kalau recording terpaksa dipotong
+    # karena MAX_SEGMENT_FRAMES,
+    # jangan percaya hasilnya sebagai
+    # kata final.
+    boundary_valid = (
+        end_reason
+        != "max_length"
+    )
+
+
+    # ========================================================
+    # ACCEPT
+    # ========================================================
+
     accepted = (
         raw_status
         == "ok"
+
+        and segment_quality_valid
+
+        and boundary_valid
 
         and confidence
         >= MIN_RESULT_CONFIDENCE
@@ -263,6 +339,10 @@ def build_segment_result(
     )
 
 
+    # ========================================================
+    # STATUS
+    # ========================================================
+
     if (
         raw_status
         == "model_not_loaded"
@@ -270,6 +350,7 @@ def build_segment_result(
         status = (
             "model_not_loaded"
         )
+
 
     elif (
         raw_status
@@ -279,6 +360,7 @@ def build_segment_result(
             "insufficient_hand"
         )
 
+
     elif (
         raw_status
         != "ok"
@@ -287,16 +369,34 @@ def build_segment_result(
             "error"
         )
 
+
+    elif not segment_quality_valid:
+        status = (
+            "invalid_segment"
+        )
+
+
+    elif not boundary_valid:
+        status = (
+            "boundary_uncertain"
+        )
+
+
     elif accepted:
         status = (
             "accepted"
         )
+
 
     else:
         status = (
             "uncertain"
         )
 
+
+    # ========================================================
+    # OUTPUT
+    # ========================================================
 
     return {
         "status":
@@ -390,16 +490,28 @@ def build_segment_result(
             ),
 
         "end_reason":
-            segment_info.get(
-                "end_reason",
-                "unknown",
-            ),
+            end_reason,
 
         "peak_motion":
             segment_info.get(
                 "peak_motion",
                 0.0,
             ),
+
+        "active_motion_frames":
+            segment_info.get(
+                "active_motion_frames",
+                0,
+            ),
+
+        "motion_ratio":
+            segment_info.get(
+                "motion_ratio",
+                0.0,
+            ),
+
+        "segment_quality_valid":
+            segment_quality_valid,
 
         "thresholds": {
             "min_confidence":
@@ -426,28 +538,51 @@ def build_segment_result(
 
 
 # ============================================================
-# SEGMENTER
+# ISOLATED GESTURE SEGMENTER
 # ============================================================
 
 class IsolatedGestureSegmenter:
     """
-    State:
+    State machine:
 
-    waiting
-        ↓ motion
-    recording
-        ↓ still / hand release
-    analyzing
-        ↓ inference selesai
-    cooldown
-        ↓ diam sebentar
-    waiting
+        WAITING
+           ↓
+       actual motion
+           ↓
+       RECORDING
+           ↓
+       still / release
+           ↓
+       ANALYZING
+           ↓
+       COOLDOWN
+           ↓
+        WAITING
+
+
+    Perbaikan V2:
+
+    1. Tangan MASUK frame saja
+       tidak langsung dianggap gesture.
+
+    2. Harus ada motion nyata.
+
+    3. Segment terlalu pendek / minim aktivitas
+       dibatalkan sebelum inference.
+
+    4. END threshold lebih toleran
+       terhadap jitter MediaPipe.
+
+    5. Segment yang mentok max_length
+       tidak boleh diterima sebagai word final.
     """
+
 
     def __init__(
         self,
     ):
         self.segment_counter = 0
+
 
         self.reset(
             reset_counter=False
@@ -469,6 +604,7 @@ class IsolatedGestureSegmenter:
         self.state = (
             "waiting"
         )
+
 
         self.reason = (
             "waiting_for_gesture"
@@ -506,6 +642,9 @@ class IsolatedGestureSegmenter:
         self.no_hand_frames = 0
 
         self.rearm_still_frames = 0
+
+
+        self.active_motion_frames = 0
 
 
         self.current_segment_id = None
@@ -554,6 +693,7 @@ class IsolatedGestureSegmenter:
                 )
             )
 
+
             previous = (
                 self.previous_hands.get(
                     key
@@ -561,12 +701,20 @@ class IsolatedGestureSegmenter:
             )
 
 
+            # =================================================
+            # HAND ENTERED
+            # =================================================
+
             if (
                 current is not None
                 and previous is None
             ):
                 entry_event = True
 
+
+            # =================================================
+            # MOTION DIFFERENCE
+            # =================================================
 
             if (
                 current is not None
@@ -606,6 +754,10 @@ class IsolatedGestureSegmenter:
         )
 
 
+        # ====================================================
+        # CURRENT MOTION
+        # ====================================================
+
         if hand_motion_scores:
             raw_motion = max(
                 hand_motion_scores
@@ -619,6 +771,10 @@ class IsolatedGestureSegmenter:
             raw_motion
         )
 
+
+        # ====================================================
+        # EMA
+        # ====================================================
 
         self.motion_ema = (
             MOTION_EMA_ALPHA
@@ -661,12 +817,58 @@ class IsolatedGestureSegmenter:
 
 
     # ========================================================
+    # QUALITY CHECK
+    # ========================================================
+
+    def _quality_valid(
+        self,
+        frame_count=None,
+    ):
+        if frame_count is None:
+            total_frames = len(
+                self.current_frames
+            )
+
+        else:
+            total_frames = int(
+                frame_count
+            )
+
+
+        return (
+            total_frames
+            >= MIN_SEGMENT_FRAMES
+
+            and self.active_motion_frames
+            >= MIN_ACTIVE_MOTION_FRAMES
+
+            and self.peak_motion
+            >= START_MOTION_THRESHOLD
+        )
+
+
+    # ========================================================
     # SNAPSHOT
     # ========================================================
 
     def snapshot(
         self,
     ):
+        current_length = len(
+            self.current_frames
+        )
+
+
+        if current_length > 0:
+            motion_ratio = (
+                self.active_motion_frames
+                / current_length
+            )
+
+        else:
+            motion_ratio = 0.0
+
+
         return {
             "status":
                 self.state,
@@ -678,9 +880,7 @@ class IsolatedGestureSegmenter:
                 self.current_segment_id,
 
             "source_frames":
-                len(
-                    self.current_frames
-                ),
+                current_length,
 
             "pre_roll_frames":
                 len(
@@ -703,6 +903,15 @@ class IsolatedGestureSegmenter:
                 round(
                     self.peak_motion,
                     6,
+                ),
+
+            "active_motion_frames":
+                self.active_motion_frames,
+
+            "motion_ratio":
+                round(
+                    motion_ratio,
+                    4,
                 ),
 
             "start_counter":
@@ -729,11 +938,17 @@ class IsolatedGestureSegmenter:
                 "start_motion":
                     START_MOTION_THRESHOLD,
 
+                "active_motion":
+                    ACTIVE_MOTION_THRESHOLD,
+
                 "end_motion":
                     END_MOTION_THRESHOLD,
 
                 "start_consecutive_frames":
                     START_CONSECUTIVE_FRAMES,
+
+                "min_active_motion_frames":
+                    MIN_ACTIVE_MOTION_FRAMES,
 
                 "end_still_frames":
                     END_STILL_FRAMES,
@@ -784,6 +999,8 @@ class IsolatedGestureSegmenter:
         )
 
 
+        # Pre-roll sudah mencakup beberapa
+        # frame sebelum gesture benar-benar aktif.
         self.current_frames = list(
             self.pre_roll
         )
@@ -796,13 +1013,18 @@ class IsolatedGestureSegmenter:
         self.no_hand_frames = 0
 
 
+        # Frame yang men-trigger start
+        # sudah termasuk motion nyata.
+        self.active_motion_frames = 1
+
+
         self.peak_motion = (
             self.motion_ema
         )
 
 
     # ========================================================
-    # CANCEL SHORT SEGMENT
+    # CANCEL RECORDING
     # ========================================================
 
     def _cancel_recording(
@@ -813,15 +1035,19 @@ class IsolatedGestureSegmenter:
             "waiting"
         )
 
+
         self.reason = (
             reason
         )
 
+
         self.current_frames = []
+
 
         self.current_segment_id = (
             None
         )
+
 
         self.start_counter = 0
 
@@ -829,7 +1055,16 @@ class IsolatedGestureSegmenter:
 
         self.no_hand_frames = 0
 
+        self.active_motion_frames = 0
+
+
         self.peak_motion = 0.0
+
+
+        # Jangan bawa motion lama terlalu kuat
+        # ke candidate berikutnya.
+        self.motion_ema *= 0.50
+
 
         self.pre_roll.clear()
 
@@ -848,7 +1083,7 @@ class IsolatedGestureSegmenter:
 
 
         # ====================================================
-        # TRIM EXCESS STILL TAIL
+        # TRIM STILL TAIL
         # ====================================================
 
         if (
@@ -857,6 +1092,7 @@ class IsolatedGestureSegmenter:
         ):
             excess_still = max(
                 0,
+
                 self.still_frames
                 - POST_ROLL_FRAMES,
             )
@@ -864,6 +1100,7 @@ class IsolatedGestureSegmenter:
 
             if (
                 excess_still > 0
+
                 and (
                     len(frames)
                     - excess_still
@@ -878,7 +1115,7 @@ class IsolatedGestureSegmenter:
 
 
         # ====================================================
-        # TRIM EXCESS MISSING HAND TAIL
+        # TRIM MISSING-HAND TAIL
         # ====================================================
 
         if (
@@ -887,6 +1124,7 @@ class IsolatedGestureSegmenter:
         ):
             excess_missing = max(
                 0,
+
                 self.no_hand_frames
                 - 1,
             )
@@ -894,6 +1132,7 @@ class IsolatedGestureSegmenter:
 
             if (
                 excess_missing > 0
+
                 and (
                     len(frames)
                     - excess_missing
@@ -907,6 +1146,21 @@ class IsolatedGestureSegmenter:
                 )
 
 
+        source_frames = len(
+            frames
+        )
+
+
+        if source_frames > 0:
+            motion_ratio = (
+                self.active_motion_frames
+                / source_frames
+            )
+
+        else:
+            motion_ratio = 0.0
+
+
         completed = {
             "segment_id":
                 self.current_segment_id,
@@ -915,9 +1169,7 @@ class IsolatedGestureSegmenter:
                 frames,
 
             "source_frames":
-                len(
-                    frames
-                ),
+                source_frames,
 
             "end_reason":
                 end_reason,
@@ -927,12 +1179,27 @@ class IsolatedGestureSegmenter:
                     self.peak_motion,
                     6,
                 ),
+
+            "active_motion_frames":
+                self.active_motion_frames,
+
+            "motion_ratio":
+                round(
+                    motion_ratio,
+                    4,
+                ),
+
+            "quality_valid":
+                self._quality_valid(
+                    source_frames
+                ),
         }
 
 
         self.state = (
             "analyzing"
         )
+
 
         self.reason = (
             "segment_complete"
@@ -941,7 +1208,9 @@ class IsolatedGestureSegmenter:
 
         self.current_frames = []
 
+
         self.pre_roll.clear()
+
 
         self.still_frames = 0
 
@@ -952,7 +1221,7 @@ class IsolatedGestureSegmenter:
 
 
     # ========================================================
-    # OBSERVE
+    # OBSERVE FRAME
     # ========================================================
 
     def observe(
@@ -961,6 +1230,7 @@ class IsolatedGestureSegmenter:
         landmarks,
         current_hand_detected,
     ):
+        # Result event hanya hidup satu update.
         self.result_event = False
 
 
@@ -982,10 +1252,6 @@ class IsolatedGestureSegmenter:
 
         # ====================================================
         # ANALYZING
-        #
-        # Backend analysis synchronous.
-        # Biasanya state ini langsung berubah
-        # ke cooldown pada frame yang sama.
         # ====================================================
 
         if (
@@ -999,7 +1265,7 @@ class IsolatedGestureSegmenter:
 
 
         # ====================================================
-        # COOLDOWN / REARM
+        # COOLDOWN
         # ====================================================
 
         if (
@@ -1011,7 +1277,7 @@ class IsolatedGestureSegmenter:
             )
 
 
-            is_rearmed = (
+            rearm_condition = (
                 not current_hand_detected
 
                 or self.motion_ema
@@ -1019,7 +1285,7 @@ class IsolatedGestureSegmenter:
             )
 
 
-            if is_rearmed:
+            if rearm_condition:
                 self.rearm_still_frames += 1
 
             else:
@@ -1034,13 +1300,16 @@ class IsolatedGestureSegmenter:
                     "waiting"
                 )
 
+
                 self.reason = (
                     "ready_for_next_gesture"
                 )
 
+
                 self.rearm_still_frames = 0
 
                 self.start_counter = 0
+
 
                 self.current_segment_id = (
                     None
@@ -1066,14 +1335,20 @@ class IsolatedGestureSegmenter:
             )
 
 
+            # =================================================
+            # NO HAND
+            # =================================================
+
             if not current_hand_detected:
                 self.start_counter = 0
+
 
                 self.reason = (
                     "waiting_for_hand"
                 )
 
-                self.motion_ema *= 0.75
+
+                self.motion_ema *= 0.70
 
 
                 return (
@@ -1082,12 +1357,29 @@ class IsolatedGestureSegmenter:
                 )
 
 
-            # Hand baru masuk kamera merupakan
-            # start cue yang kuat.
+            # =================================================
+            # HAND ENTRY
+            #
+            # Perubahan penting:
+            # hand entry TIDAK langsung start.
+            # Hanya memberi 1 candidate count.
+            # =================================================
+
             if entry_event:
-                self.start_counter = (
-                    START_CONSECUTIVE_FRAMES
+                self.start_counter = max(
+                    self.start_counter,
+                    1,
                 )
+
+
+                self.reason = (
+                    "hand_entered"
+                )
+
+
+            # =================================================
+            # TRUE MOTION
+            # =================================================
 
             elif (
                 self.motion_ema
@@ -1095,26 +1387,39 @@ class IsolatedGestureSegmenter:
             ):
                 self.start_counter += 1
 
-            else:
-                self.start_counter = 0
 
+                self.reason = (
+                    "motion_candidate"
+                )
+
+
+            # =================================================
+            # IDLE / JITTER
+            # =================================================
+
+            else:
+                self.start_counter = max(
+                    0,
+
+                    self.start_counter
+                    - 1,
+                )
+
+
+                self.reason = (
+                    "waiting_for_motion"
+                )
+
+
+            # =================================================
+            # START
+            # =================================================
 
             if (
                 self.start_counter
                 >= START_CONSECUTIVE_FRAMES
             ):
                 self._start_recording()
-
-
-                return (
-                    self.snapshot(),
-                    None,
-                )
-
-
-            self.reason = (
-                "waiting_for_motion"
-            )
 
 
             return (
@@ -1136,10 +1441,25 @@ class IsolatedGestureSegmenter:
             )
 
 
+            # =================================================
+            # PEAK MOTION
+            # =================================================
+
             self.peak_motion = max(
                 self.peak_motion,
                 self.motion_ema,
             )
+
+
+            # =================================================
+            # ACTIVE MOTION COUNT
+            # =================================================
+
+            if (
+                self.motion_ema
+                >= ACTIVE_MOTION_THRESHOLD
+            ):
+                self.active_motion_frames += 1
 
 
             # =================================================
@@ -1155,10 +1475,15 @@ class IsolatedGestureSegmenter:
 
             # =================================================
             # STILLNESS
+            #
+            # END threshold dibuat lebih toleran
+            # supaya jitter MediaPipe ~0.005
+            # tidak membuat recording terus hidup.
             # =================================================
 
             if (
                 current_hand_detected
+
                 and self.motion_ema
                 <= END_MOTION_THRESHOLD
             ):
@@ -1173,18 +1498,27 @@ class IsolatedGestureSegmenter:
             )
 
 
-            min_reached = (
+            min_length_reached = (
                 source_frames
                 >= MIN_SEGMENT_FRAMES
             )
 
 
+            quality_ready = (
+                self.active_motion_frames
+                >= MIN_ACTIVE_MOTION_FRAMES
+
+                and self.peak_motion
+                >= START_MOTION_THRESHOLD
+            )
+
+
             # =================================================
-            # FALSE START
+            # SHORT FALSE SEGMENT
             # =================================================
 
             if (
-                not min_reached
+                not min_length_reached
 
                 and self.no_hand_frames
                 >= NO_HAND_END_FRAMES
@@ -1201,36 +1535,27 @@ class IsolatedGestureSegmenter:
 
 
             # =================================================
-            # MAX LENGTH
+            # HAND RELEASE END
             # =================================================
 
             if (
-                source_frames
-                >= MAX_SEGMENT_FRAMES
-            ):
-                completed = (
-                    self._finalize(
-                        "max_length"
-                    )
-                )
-
-
-                return (
-                    self.snapshot(),
-                    completed,
-                )
-
-
-            # =================================================
-            # HAND RELEASE
-            # =================================================
-
-            if (
-                min_reached
+                min_length_reached
 
                 and self.no_hand_frames
                 >= NO_HAND_END_FRAMES
             ):
+                if not quality_ready:
+                    self._cancel_recording(
+                        "low_activity_cancelled"
+                    )
+
+
+                    return (
+                        self.snapshot(),
+                        None,
+                    )
+
+
                 completed = (
                     self._finalize(
                         "hand_released"
@@ -1245,18 +1570,63 @@ class IsolatedGestureSegmenter:
 
 
             # =================================================
-            # MOTION FINISHED
+            # STILL END
             # =================================================
 
             if (
-                min_reached
+                min_length_reached
 
                 and self.still_frames
                 >= END_STILL_FRAMES
             ):
+                if not quality_ready:
+                    self._cancel_recording(
+                        "low_activity_cancelled"
+                    )
+
+
+                    return (
+                        self.snapshot(),
+                        None,
+                    )
+
+
                 completed = (
                     self._finalize(
                         "still"
+                    )
+                )
+
+
+                return (
+                    self.snapshot(),
+                    completed,
+                )
+
+
+            # =================================================
+            # MAX LENGTH SAFETY
+            # =================================================
+
+            if (
+                source_frames
+                >= MAX_SEGMENT_FRAMES
+            ):
+                if not quality_ready:
+                    self._cancel_recording(
+                        "max_length_cancelled"
+                    )
+
+
+                    return (
+                        self.snapshot(),
+                        None,
+                    )
+
+
+                completed = (
+                    self._finalize(
+                        "max_length"
                     )
                 )
 
@@ -1305,6 +1675,7 @@ class IsolatedGestureSegmenter:
             result
         )
 
+
         self.result_event = True
 
 
@@ -1318,6 +1689,7 @@ class IsolatedGestureSegmenter:
                 result,
                 dict,
             )
+
             and result.get(
                 "accepted",
                 False,
@@ -1337,17 +1709,23 @@ class IsolatedGestureSegmenter:
             result.get(
                 "segment_id"
             )
+
             if isinstance(
                 result,
                 dict,
             )
+
             else None
         )
 
 
         self.rearm_still_frames = 0
 
+
         self.motion_ema = 0.0
+
+        self.active_motion_frames = 0
+
 
         self.pre_roll.clear()
 
