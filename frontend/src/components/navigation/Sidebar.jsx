@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   BrainCircuit,
   History,
   Languages,
@@ -12,6 +13,7 @@ import {
 } from "react-router-dom";
 
 import "../../styles/sidebar.css";
+
 
 const navigationItems = [
   {
@@ -27,6 +29,12 @@ const navigationItems = [
     icon: ScanLine,
   },
   {
+    id: "learning",
+    label: "Belajar BISINDO",
+    path: "/learning",
+    icon: BookOpen,
+  },
+  {
     id: "history",
     label: "History",
     path: "/history",
@@ -40,6 +48,7 @@ const navigationItems = [
   },
 ];
 
+
 function Sidebar() {
   return (
     <aside className="sidebar">
@@ -52,12 +61,16 @@ function Sidebar() {
         </div>
 
         <div className="sidebar-brand-text">
-          <strong>BISINDO AI</strong>
+          <strong>
+            BISINDO AI
+          </strong>
+
           <span>
             Recognition System
           </span>
         </div>
       </div>
+
 
       <div className="sidebar-section">
         <span className="sidebar-section-label">
@@ -70,7 +83,9 @@ function Sidebar() {
         >
           {navigationItems.map(
             (item) => {
-              const Icon = item.icon;
+              const Icon =
+                item.icon;
+
 
               return (
                 <NavLink
@@ -86,7 +101,9 @@ function Sidebar() {
                     }`
                   }
                 >
-                  {({ isActive }) => (
+                  {({
+                    isActive,
+                  }) => (
                     <>
                       <span className="sidebar-nav-icon">
                         <Icon
@@ -111,10 +128,13 @@ function Sidebar() {
         </nav>
       </div>
 
+
       <div className="sidebar-footer">
         <NavLink
           to="/settings"
-          className={({ isActive }) =>
+          className={({
+            isActive,
+          }) =>
             `sidebar-nav-item ${
               isActive
                 ? "active"
@@ -122,7 +142,9 @@ function Sidebar() {
             }`
           }
         >
-          {({ isActive }) => (
+          {({
+            isActive,
+          }) => (
             <>
               <span className="sidebar-nav-icon">
                 <Settings
@@ -142,6 +164,7 @@ function Sidebar() {
           )}
         </NavLink>
 
+
         <div className="sidebar-version">
           <span className="sidebar-version-dot" />
 
@@ -159,5 +182,6 @@ function Sidebar() {
     </aside>
   );
 }
+
 
 export default Sidebar;

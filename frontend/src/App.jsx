@@ -4,15 +4,29 @@ import {
   Routes,
 } from "react-router-dom";
 
-import AppLayout from "./layouts/AppLayout";
+import AppLayout
+  from "./layouts/AppLayout";
 
-import DashboardPage from "./pages/DashboardPage";
-import RecognitionPage from "./pages/RecognitionPage";
-import HistoryPage from "./pages/HistoryPage";
-import ModelsPage from "./pages/ModelsPage";
-import SettingsPage from "./pages/SettingsPage";
+import DashboardPage
+  from "./pages/DashboardPage";
+
+import RecognitionPage
+  from "./pages/RecognitionPage";
+
+import LearningPage
+  from "./pages/LearningPage";
+
+import HistoryPage
+  from "./pages/HistoryPage";
+
+import ModelsPage
+  from "./pages/ModelsPage";
+
+import SettingsPage
+  from "./pages/SettingsPage";
 
 import "./styles/layout.css";
+
 
 function App() {
   return (
@@ -30,27 +44,44 @@ function App() {
 
         <Route
           path="/dashboard"
-          element={<DashboardPage />}
+          element={
+            <DashboardPage />
+          }
         />
 
         <Route
           path="/recognition"
-          element={<RecognitionPage />}
+          element={
+            <RecognitionPage />
+          }
+        />
+
+        <Route
+          path="/learning"
+          element={
+            <LearningPage />
+          }
         />
 
         <Route
           path="/history"
-          element={<HistoryPage />}
+          element={
+            <HistoryPage />
+          }
         />
 
         <Route
           path="/models"
-          element={<ModelsPage />}
+          element={
+            <ModelsPage />
+          }
         />
 
         <Route
           path="/settings"
-          element={<SettingsPage />}
+          element={
+            <SettingsPage />
+          }
         />
 
         <Route
@@ -66,5 +97,6 @@ function App() {
     </AppLayout>
   );
 }
+
 
 export default App;
