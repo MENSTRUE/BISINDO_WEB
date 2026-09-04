@@ -1,4 +1,10 @@
 import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import {
   Activity,
   Camera,
   CircleAlert,
@@ -9,6 +15,8 @@ import {
   Play,
   ScanLine,
   Square,
+  Trash2,
+  Undo2,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -51,11 +59,8 @@ function RecognitionPage() {
   ========================= */
 
   const {
-    status:
-      backendStatus,
-
-    isOnline:
-      isBackendOnline,
+    status: backendStatus,
+    isOnline: isBackendOnline,
   } = useBackendHealth();
 
 
@@ -87,7 +92,6 @@ function RecognitionPage() {
     lastFrameId,
 
     segmentStatus,
-    segmentReason,
     segmentId,
     segmentSourceFrames,
 
@@ -98,6 +102,7 @@ function RecognitionPage() {
 
     predictionStatus,
     predictionAccepted,
+    predictionAcceptedEvent,
 
     predictionLabel,
     predictionConfidencePercent,
@@ -119,6 +124,116 @@ function RecognitionPage() {
 
     predictionThresholds,
   } = useRealtimeLandmarks();
+
+
+  /* =========================
+     TRANSCRIPT
+  ========================= */
+
+  const [
+    transcriptWords,
+    setTranscriptWords,
+  ] = useState([]);
+
+
+  /*
+   * Digunakan untuk memastikan
+   * satu segment hanya masuk
+   * satu kali ke transcript.
+   */
+  const lastTranscriptSegmentRef =
+    useRef(null);
+
+
+  useEffect(() => {
+    /*
+     * HANYA accepted_event yang
+     * boleh menambah kata.
+     *
+     * Jangan memakai predictionAccepted
+     * langsung karena status accepted
+     * dapat tetap tersimpan setelah
+     * event inference selesai.
+     */
+    if (
+      !predictionAcceptedEvent
+      ||
+      !predictionAccepted
+      ||
+      !predictionLabel
+    ) {
+      return;
+    }
+
+
+    /*
+     * Backend normalnya memberikan
+     * segment id untuk setiap gesture.
+     */
+    if (
+      predictionSegmentId !== null
+      &&
+      predictionSegmentId !== undefined
+    ) {
+      if (
+        lastTranscriptSegmentRef.current
+        === predictionSegmentId
+      ) {
+        return;
+      }
+
+
+      lastTranscriptSegmentRef.current =
+        predictionSegmentId;
+    }
+
+
+    setTranscriptWords(
+      (previousWords) => [
+        ...previousWords,
+        predictionLabel,
+      ]
+    );
+
+  }, [
+    predictionAcceptedEvent,
+    predictionAccepted,
+    predictionLabel,
+    predictionSegmentId,
+  ]);
+
+
+  /* =========================
+     TRANSCRIPT ACTIONS
+  ========================= */
+
+  const removeLastTranscriptWord =
+    () => {
+      setTranscriptWords(
+        (previousWords) =>
+          previousWords.slice(
+            0,
+            -1
+          )
+      );
+    };
+
+
+  const clearTranscript =
+    () => {
+      setTranscriptWords([]);
+
+      lastTranscriptSegmentRef.current =
+        null;
+    };
+
+
+  const transcriptText =
+    transcriptWords.join(" ");
+
+
+  const transcriptWordCount =
+    transcriptWords.length;
 
 
   /* =========================
@@ -195,12 +310,14 @@ function RecognitionPage() {
         return "Online";
       }
 
+
       if (
         backendStatus ===
         "checking"
       ) {
         return "Checking";
       }
+
 
       return "Offline";
     };
@@ -219,6 +336,7 @@ function RecognitionPage() {
         return "Meminta Izin";
       }
 
+
       if (
         cameraStatus ===
         "active"
@@ -226,12 +344,14 @@ function RecognitionPage() {
         return "Camera On";
       }
 
+
       if (
         cameraStatus ===
         "error"
       ) {
         return "Camera Error";
       }
+
 
       return "Camera Off";
     };
@@ -246,9 +366,7 @@ function RecognitionPage() {
       if (
         !isCameraActive
       ) {
-        return (
-          "Kamera belum aktif."
-        );
+        return "Kamera belum aktif.";
       }
 
 
@@ -289,9 +407,7 @@ function RecognitionPage() {
       if (
         !isCameraActive
       ) {
-        return (
-          "Menunggu Kamera"
-        );
+        return "Menunggu Kamera";
       }
 
 
@@ -299,9 +415,7 @@ function RecognitionPage() {
         segmentStatus ===
         "recording"
       ) {
-        return (
-          "Merekam Gesture..."
-        );
+        return "Merekam Gesture...";
       }
 
 
@@ -309,9 +423,7 @@ function RecognitionPage() {
         segmentStatus ===
         "analyzing"
       ) {
-        return (
-          "Menganalisis..."
-        );
+        return "Menganalisis...";
       }
 
 
@@ -322,9 +434,7 @@ function RecognitionPage() {
         if (
           hasAcceptedWord
         ) {
-          return (
-            predictionLabel
-          );
+          return predictionLabel;
         }
 
 
@@ -332,9 +442,7 @@ function RecognitionPage() {
           predictionStatus ===
           "uncertain"
         ) {
-          return (
-            "Tidak Yakin"
-          );
+          return "Tidak Yakin";
         }
       }
 
@@ -346,15 +454,11 @@ function RecognitionPage() {
         if (
           hasAcceptedWord
         ) {
-          return (
-            predictionLabel
-          );
+          return predictionLabel;
         }
 
 
-        return (
-          "Menunggu Gerakan"
-        );
+        return "Menunggu Gerakan";
       }
 
 
@@ -362,15 +466,11 @@ function RecognitionPage() {
         predictionStatus ===
         "model_not_loaded"
       ) {
-        return (
-          "Model Offline"
-        );
+        return "Model Offline";
       }
 
 
-      return (
-        "Menunggu Gerakan"
-      );
+      return "Menunggu Gerakan";
     };
 
 
@@ -437,7 +537,7 @@ function RecognitionPage() {
             predictionConfidencePercent
           ).toFixed(1)}% · `
           +
-          `diam sebentar untuk gesture berikutnya.`
+          `masuk ke transcript.`
         );
       }
 
@@ -517,8 +617,7 @@ function RecognitionPage() {
 
 
       if (
-        predictionSourceFrames
-        > 0
+        predictionSourceFrames > 0
       ) {
         return (
           `${predictionSourceFrames} → 48`
@@ -549,16 +648,15 @@ function RecognitionPage() {
 
       return predictionTop3
         .map(
-          (
-            item
-          ) => {
+          (item) => {
             const confidence =
               Number(
                 item
-                  .confidence_percent ??
+                  .confidence_percent
+                ??
                 0
               )
-              .toFixed(1);
+                .toFixed(1);
 
 
             return (
@@ -673,7 +771,8 @@ function RecognitionPage() {
           +
           `${Number(
             predictionThresholds
-              ?.minConfidencePercent ??
+              ?.minConfidencePercent
+            ??
             70
           ).toFixed(0)}% · `
           +
@@ -681,7 +780,8 @@ function RecognitionPage() {
           +
           `${Number(
             predictionThresholds
-              ?.minMarginPercent ??
+              ?.minMarginPercent
+            ??
             10
           ).toFixed(0)}%.`
         );
@@ -723,7 +823,8 @@ function RecognitionPage() {
           +
           `start ≥${Number(
             segmentThresholds
-              ?.startMotion ??
+              ?.startMotion
+            ??
             0.010
           ).toFixed(4)} · `
           +
@@ -793,9 +894,7 @@ function RecognitionPage() {
         segmentStatus ===
         "recording"
       ) {
-        return (
-          "Recording Gesture"
-        );
+        return "Recording Gesture";
       }
 
 
@@ -803,9 +902,7 @@ function RecognitionPage() {
         segmentStatus ===
         "analyzing"
       ) {
-        return (
-          "AI Analyzing"
-        );
+        return "AI Analyzing";
       }
 
 
@@ -815,9 +912,7 @@ function RecognitionPage() {
         &&
         hasAcceptedWord
       ) {
-        return (
-          "Word Accepted"
-        );
+        return "Word Accepted";
       }
 
 
@@ -825,33 +920,25 @@ function RecognitionPage() {
         segmentStatus ===
         "cooldown"
       ) {
-        return (
-          "Rearming"
-        );
+        return "Rearming";
       }
 
 
       if (
         hasVisionData
       ) {
-        return (
-          "AI Ready"
-        );
+        return "AI Ready";
       }
 
 
       if (
         isStreaming
       ) {
-        return (
-          "Frame Streaming"
-        );
+        return "Frame Streaming";
       }
 
 
-      return (
-        "Frontend Ready"
-      );
+      return "Frontend Ready";
     };
 
 
@@ -903,6 +990,41 @@ function RecognitionPage() {
 
 
       return "LIVE";
+    };
+
+
+  /* =========================
+     TRANSCRIPT STATUS
+  ========================= */
+
+  const getTranscriptStatus =
+    () => {
+      if (
+        segmentStatus ===
+        "recording"
+      ) {
+        return "Recording";
+      }
+
+
+      if (
+        segmentStatus ===
+        "analyzing"
+      ) {
+        return "Analyzing";
+      }
+
+
+      if (
+        transcriptWordCount > 0
+      ) {
+        return (
+          `${transcriptWordCount} Kata`
+        );
+      }
+
+
+      return "Waiting";
     };
 
 
@@ -1014,6 +1136,7 @@ function RecognitionPage() {
                     strokeWidth={1.4}
                   />
                 </div>
+
 
                 {cameraStatus ===
                 "requesting" ? (
@@ -1346,15 +1469,7 @@ function RecognitionPage() {
               strokeWidth={1.7}
             />
 
-            {segmentStatus ===
-            "recording"
-              ? "Recording"
-              : segmentStatus ===
-                  "analyzing"
-                ? "Analyzing"
-                : hasAcceptedWord
-                  ? "Word Ready"
-                  : "Waiting"}
+            {getTranscriptStatus()}
           </div>
         </div>
 
@@ -1366,48 +1481,82 @@ function RecognitionPage() {
           />
 
           <p>
-            {hasAcceptedWord
-              ? (
-                  `Kata terakhir: `
-                  +
-                  `${predictionLabel}. `
-                  +
-                  `Segment #`
-                  +
-                  `${predictionSegmentId ?? "--"} `
-                  +
-                  `menggunakan `
-                  +
-                  `${predictionSourceFrames} `
-                  +
-                  `source frame → 48 frame. `
-                  +
-                  `Penyusunan beberapa kata `
-                  +
-                  `menjadi kalimat akan `
-                  +
-                  `diaktifkan setelah segmentasi stabil.`
-                )
-              : hasPredictionResult &&
+            {transcriptWordCount > 0
+              ? transcriptText
+              : hasPredictionResult
+                &&
                 predictionStatus ===
                   "uncertain"
                 ? (
-                    `Gesture terakhir belum `
+                    `Gesture terakhir belum cukup yakin `
                     +
-                    `cukup yakin untuk diterima. `
+                    `untuk masuk ke kalimat. `
                     +
-                    `Top kandidat: `
-                    +
-                    `${getTop3Text()}.`
+                    `Top kandidat: ${getTop3Text()}.`
                   )
                 : (
-                    "Lakukan satu gesture BISINDO, "
+                    "Belum ada kata diterima. "
                     +
-                    "kemudian diam sebentar hingga "
-                    +
-                    "gesture selesai direkam."
+                    "Lakukan gesture BISINDO satu per satu."
                   )}
           </p>
+        </div>
+
+
+        {/* TRANSCRIPT CONTROLS */}
+
+        <div
+          className="camera-controls"
+          style={{
+            minHeight: "unset",
+            paddingTop: "12px",
+          }}
+        >
+          <button
+            type="button"
+            className="recognition-control secondary"
+            onClick={
+              removeLastTranscriptWord
+            }
+            disabled={
+              transcriptWordCount === 0
+            }
+          >
+            <Undo2
+              size={15}
+              strokeWidth={1.9}
+            />
+
+            Hapus Kata Terakhir
+          </button>
+
+
+          <button
+            type="button"
+            className="recognition-control secondary"
+            onClick={
+              clearTranscript
+            }
+            disabled={
+              transcriptWordCount === 0
+            }
+          >
+            <Trash2
+              size={15}
+              strokeWidth={1.9}
+            />
+
+            Bersihkan Kalimat
+          </button>
+
+
+          <div className="camera-control-info">
+            {transcriptWordCount > 0
+              ? (
+                  `${transcriptWordCount} kata diterima`
+                )
+              : "Transcript kosong"}
+          </div>
         </div>
       </section>
     </div>

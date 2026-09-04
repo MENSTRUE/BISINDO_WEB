@@ -14,29 +14,31 @@ import {
 ========================= */
 
 /*
- * Sebelumnya 640.
+ * Continuous rolling mode.
  *
- * Kita turunkan ke 512
- * untuk meringankan:
- * - JPEG encode
- * - WebSocket payload
- * - OpenCV decode
- * - MediaPipe vision
+ * Gunakan 640 px agar landmark tangan
+ * lebih jelas dibanding versi 512 px,
+ * tetapi masih lebih ringan daripada
+ * mengirim resolusi kamera penuh.
  *
  * Landmark MediaPipe menggunakan
  * koordinat normalized, sehingga
  * dimensi feature model tidak berubah.
  */
-const FRAME_WIDTH = 512;
+const FRAME_WIDTH = 640;
 
 
 /*
- * Maksimum tetap 10 FPS.
+ * Target maksimum 30 FPS agar rolling
+ * 48-frame lebih mendekati runtime
+ * Python lokal.
  *
- * Kita tidak sengaja mengubah
- * temporal target menjadi 5 FPS.
+ * Backpressure tetap aktif, jadi bila
+ * backend hanya mampu 12-18 FPS,
+ * streamer otomatis mengikuti kemampuan
+ * backend dan tidak menumpuk frame.
  */
-const TARGET_FPS = 10;
+const TARGET_FPS = 30;
 
 
 const TARGET_FRAME_INTERVAL_MS =
@@ -44,20 +46,19 @@ const TARGET_FRAME_INTERVAL_MS =
 
 
 /*
- * Scheduler dicek lebih cepat.
- *
- * Bukan berarti mengirim 50 FPS.
- * Pengiriman tetap dibatasi oleh
- * TARGET_FRAME_INTERVAL_MS.
+ * Scheduler hanya mengecek apakah frame
+ * sudah boleh dikirim. Pengiriman nyata
+ * tetap dibatasi TARGET_FRAME_INTERVAL_MS
+ * dan mekanisme backpressure.
  */
-const SCHEDULER_INTERVAL_MS = 20;
+const SCHEDULER_INTERVAL_MS = 10;
 
 
 /*
- * Sedikit lebih ringan daripada
- * quality 0.65 sebelumnya.
+ * Naik sedikit dari versi ringan 0.60
+ * supaya detail tangan lebih terjaga.
  */
-const JPEG_QUALITY = 0.60;
+const JPEG_QUALITY = 0.72;
 
 
 /*
