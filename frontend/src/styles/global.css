@@ -2,6 +2,7 @@
   box-sizing: border-box;
 }
 
+
 html,
 body,
 #root {
@@ -10,9 +11,19 @@ body,
   margin: 0;
 }
 
+
 html {
-  background: #090b0f;
+  background:
+    var(
+      --app-background,
+      #090b0f
+    );
+
+  transition:
+    background-color
+    180ms ease;
 }
+
 
 body {
   margin: 0;
@@ -26,12 +37,31 @@ body {
     "Segoe UI",
     sans-serif;
 
-  background: #090b0f;
-  color: #f5f7fa;
+  background:
+    var(
+      --app-background,
+      #090b0f
+    );
 
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  color:
+    var(
+      --text-primary,
+      #f5f7fa
+    );
+
+  -webkit-font-smoothing:
+    antialiased;
+
+  text-rendering:
+    optimizeLegibility;
+
+  transition:
+    background-color
+      180ms ease,
+    color
+      180ms ease;
 }
+
 
 button,
 input,
@@ -40,11 +70,70 @@ select {
   font: inherit;
 }
 
+
 button {
   border: 0;
 }
 
+
 a {
   color: inherit;
   text-decoration: none;
+}
+
+
+::selection {
+  background:
+    rgba(
+      71,
+      209,
+      133,
+      0.25
+    );
+}
+
+
+/* =========================
+   SCROLLBAR
+========================= */
+
+* {
+  scrollbar-width:
+    thin;
+
+  scrollbar-color:
+    var(
+      --scroll-thumb,
+      #303741
+    )
+    transparent;
+}
+
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+
+*::-webkit-scrollbar-track {
+  background:
+    transparent;
+}
+
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid
+    transparent;
+
+  border-radius: 999px;
+
+  background:
+    var(
+      --scroll-thumb,
+      #303741
+    );
+
+  background-clip:
+    padding-box;
 }

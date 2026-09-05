@@ -1,15 +1,22 @@
 import {
   Cpu,
   LoaderCircle,
+  Moon,
+  Sun,
   Wifi,
   WifiOff,
 } from "lucide-react";
 
-import useBackendHealth from "../../hooks/useBackendHealth";
+import useBackendHealth
+  from "../../hooks/useBackendHealth";
 
 import {
   useRealtime,
 } from "../../contexts/RealtimeContext";
+
+import {
+  useTheme,
+} from "../../contexts/ThemeContext";
 
 import "../../styles/header.css";
 
@@ -21,8 +28,10 @@ function Header() {
 
   const {
     health,
-    isOnline: isBackendOnline,
-    isChecking: isBackendChecking,
+    isOnline:
+      isBackendOnline,
+    isChecking:
+      isBackendChecking,
   } = useBackendHealth();
 
 
@@ -31,38 +40,83 @@ function Header() {
   ========================= */
 
   const {
-    status: realtimeStatus,
+    status:
+      realtimeStatus,
+
     isConnected:
       isRealtimeConnected,
   } = useRealtime();
 
 
   /* =========================
+     THEME
+  ========================= */
+
+  const {
+    theme,
+    toggleTheme,
+  } = useTheme();
+
+
+  const isDarkTheme =
+    theme === "dark";
+
+
+  const ThemeIcon =
+    isDarkTheme
+      ? Sun
+      : Moon;
+
+
+  const themeLabel =
+    isDarkTheme
+      ? "Dark Mode"
+      : "Light Mode";
+
+
+  const themeButtonTitle =
+    isDarkTheme
+      ? "Gunakan Light Mode"
+      : "Gunakan Dark Mode";
+
+
+  /* =========================
      UI STATE
   ========================= */
 
-  const getConnectionState = () => {
-    if (isBackendChecking) {
-      return "checking";
-    }
+  const getConnectionState =
+    () => {
+      if (
+        isBackendChecking
+      ) {
+        return "checking";
+      }
 
-    if (!isBackendOnline) {
+
+      if (
+        !isBackendOnline
+      ) {
+        return "offline";
+      }
+
+
+      if (
+        isRealtimeConnected
+      ) {
+        return "online";
+      }
+
+
+      if (
+        realtimeStatus ===
+        "connecting"
+      ) {
+        return "checking";
+      }
+
+
       return "offline";
-    }
-
-    if (isRealtimeConnected) {
-      return "online";
-    }
-
-    if (
-      realtimeStatus ===
-      "connecting"
-    ) {
-      return "checking";
-    }
-
-    return "offline";
-  };
+    };
 
 
   const connectionState =
@@ -70,35 +124,50 @@ function Header() {
 
 
   const ConnectionIcon =
-    connectionState === "checking"
+    connectionState ===
+    "checking"
       ? LoaderCircle
-      : connectionState === "online"
+      : connectionState ===
+          "online"
         ? Wifi
         : WifiOff;
 
 
-  const getConnectionText = () => {
-    if (isBackendChecking) {
-      return "Checking...";
-    }
+  const getConnectionText =
+    () => {
+      if (
+        isBackendChecking
+      ) {
+        return "Checking...";
+      }
 
-    if (!isBackendOnline) {
-      return "Backend Offline";
-    }
 
-    if (isRealtimeConnected) {
-      return "Realtime Online";
-    }
+      if (
+        !isBackendOnline
+      ) {
+        return "Backend Offline";
+      }
 
-    if (
-      realtimeStatus ===
-      "connecting"
-    ) {
-      return "Realtime Connecting";
-    }
 
-    return "Realtime Offline";
-  };
+      if (
+        isRealtimeConnected
+      ) {
+        return "Realtime Online";
+      }
+
+
+      if (
+        realtimeStatus ===
+        "connecting"
+      ) {
+        return (
+          "Realtime Connecting"
+        );
+      }
+
+
+      return "Realtime Offline";
+    };
 
 
   return (
@@ -157,10 +226,13 @@ function Header() {
           title={
             health
               ? (
-                  `${health.service} ${health.version}` +
+                  `${health.service} ${health.version}`
+                  +
                   ` · WebSocket ${realtimeStatus}`
                 )
-              : "Status koneksi backend"
+              : (
+                  "Status koneksi backend"
+                )
           }
         >
           <span className="header-control-icon">
@@ -170,7 +242,9 @@ function Header() {
               className={
                 connectionState ===
                 "checking"
-                  ? "connection-loading"
+                  ? (
+                      "connection-loading"
+                    )
                   : ""
               }
             />
@@ -188,10 +262,46 @@ function Header() {
                 }
               />
 
-              {getConnectionText()}
+              {
+                getConnectionText()
+              }
             </strong>
           </div>
         </div>
+
+
+        {/* THEME */}
+
+        <button
+          type="button"
+          className="header-control-card header-theme-toggle"
+          title={
+            themeButtonTitle
+          }
+          aria-label={
+            themeButtonTitle
+          }
+          onClick={
+            toggleTheme
+          }
+        >
+          <span className="header-control-icon theme-toggle-icon">
+            <ThemeIcon
+              size={16}
+              strokeWidth={1.8}
+            />
+          </span>
+
+          <div className="header-control-content">
+            <span className="header-control-label">
+              Appearance
+            </span>
+
+            <strong>
+              {themeLabel}
+            </strong>
+          </div>
+        </button>
       </div>
     </header>
   );
