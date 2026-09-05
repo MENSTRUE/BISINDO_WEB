@@ -56,13 +56,86 @@ function LandmarkCanvas({
   landmarks = EMPTY_LANDMARKS,
   mirrored = true,
 }) {
+  /* =========================
+     REFS
+  ========================= */
+
   const canvasRef =
     useRef(null);
 
 
+  /*
+   * Landmark datang terus menerus
+   * dari WebSocket.
+   *
+   * Kita simpan di ref agar
+   * ResizeObserver dan listener video
+   * tidak dibuat ulang setiap frame.
+   */
+  const landmarksRef =
+    useRef(
+      landmarks
+    );
+
+
+  const mirroredRef =
+    useRef(
+      mirrored
+    );
+
+
+  /*
+   * Fungsi draw aktif akan
+   * disimpan di sini agar effect
+   * update landmark cukup meminta
+   * redraw.
+   */
+  const requestDrawRef =
+    useRef(
+      () => {}
+    );
+
+
+  /* =========================
+     UPDATE LANDMARK
+  ========================= */
+
+  useEffect(() => {
+    landmarksRef.current =
+      landmarks;
+
+
+    requestDrawRef.current();
+
+  }, [
+    landmarks,
+  ]);
+
+
+  /* =========================
+     UPDATE MIRROR
+  ========================= */
+
+  useEffect(() => {
+    mirroredRef.current =
+      mirrored;
+
+
+    requestDrawRef.current();
+
+  }, [
+    mirrored,
+  ]);
+
+
+  /* =========================
+     CANVAS ENGINE
+  ========================= */
+
   useEffect(() => {
     const canvas =
       canvasRef.current;
+
 
     if (!canvas) {
       return undefined;
@@ -72,9 +145,27 @@ function LandmarkCanvas({
     const parent =
       canvas.parentElement;
 
+
     if (!parent) {
       return undefined;
     }
+
+
+    /*
+     * Video berada dalam container
+     * camera-preview yang sama.
+     *
+     * Tidak perlu mengubah API
+     * RecognitionPage.
+     */
+    const video =
+      parent.querySelector(
+        ".camera-video"
+      )
+      ??
+      parent.querySelector(
+        "video"
+      );
 
 
     let animationFrameId =
@@ -82,29 +173,194 @@ function LandmarkCanvas({
 
 
     /* =========================
-       DISPLAY POINT
+       VIDEO PROJECTION
+    ========================= */
+
+    const getVideoProjection = (
+      displayWidth,
+      displayHeight,
+    ) => {
+      /*
+       * Source frame yang dikirim
+       * ke backend mempertahankan
+       * aspect ratio video asli.
+       *
+       * Karena landmark normalized
+       * relatif terhadap frame tersebut,
+       * video.videoWidth/videoHeight
+       * bisa digunakan sebagai source.
+       */
+      const sourceWidth =
+        Number(
+          video?.videoWidth
+          ?? 0
+        );
+
+
+      const sourceHeight =
+        Number(
+          video?.videoHeight
+          ?? 0
+        );
+
+
+      /*
+       * Metadata video belum siap.
+       *
+       * Fallback:
+       * mapping normalized biasa.
+       */
+      if (
+        sourceWidth <= 0
+        ||
+        sourceHeight <= 0
+      ) {
+        return {
+          mode:
+            "fallback",
+
+          sourceWidth:
+            displayWidth,
+
+          sourceHeight:
+            displayHeight,
+
+          renderedWidth:
+            displayWidth,
+
+          renderedHeight:
+            displayHeight,
+
+          scale:
+            1,
+
+          offsetX:
+            0,
+
+          offsetY:
+            0,
+        };
+      }
+
+
+      /*
+       * CSS camera-video saat ini:
+       *
+       * object-fit: cover;
+       * object-position: center center;
+       *
+       * Browser memperbesar video
+       * hingga seluruh container terisi.
+       *
+       * Sebagian sisi video bisa ter-crop.
+       */
+      const scale =
+        Math.max(
+          displayWidth
+          /
+          sourceWidth,
+
+          displayHeight
+          /
+          sourceHeight,
+        );
+
+
+      const renderedWidth =
+        sourceWidth
+        *
+        scale;
+
+
+      const renderedHeight =
+        sourceHeight
+        *
+        scale;
+
+
+      /*
+       * Karena object-position center,
+       * crop dibagi rata kiri/kanan
+       * atau atas/bawah.
+       *
+       * Nilai offset bisa negatif.
+       */
+      const offsetX =
+        (
+          displayWidth
+          -
+          renderedWidth
+        )
+        /
+        2;
+
+
+      const offsetY =
+        (
+          displayHeight
+          -
+          renderedHeight
+        )
+        /
+        2;
+
+
+      return {
+        mode:
+          "cover",
+
+        sourceWidth,
+
+        sourceHeight,
+
+        renderedWidth,
+
+        renderedHeight,
+
+        scale,
+
+        offsetX,
+
+        offsetY,
+      };
+    };
+
+
+    /* =========================
+       NORMALIZED -> DISPLAY
     ========================= */
 
     const getDisplayPoint = (
       point,
-      width,
-      height,
+      displayWidth,
+      displayHeight,
+      projection,
     ) => {
       if (!point) {
         return null;
       }
 
 
-      const x =
-        Number(point.x);
+      const normalizedX =
+        Number(
+          point.x
+        );
 
-      const y =
-        Number(point.y);
+
+      const normalizedY =
+        Number(
+          point.y
+        );
 
 
       if (
-        !Number.isFinite(x) ||
-        !Number.isFinite(y)
+        !Number.isFinite(
+          normalizedX
+        )
+        ||
+        !Number.isFinite(
+          normalizedY
+        )
       ) {
         return null;
       }
@@ -112,14 +368,19 @@ function LandmarkCanvas({
 
       const confidence =
         Number(
-          point.confidence ??
-          point.visibility ??
-          1,
+          point.confidence
+          ??
+          point.visibility
+          ??
+          1
         );
 
 
       if (
-        !Number.isFinite(confidence) ||
+        !Number.isFinite(
+          confidence
+        )
+        ||
         confidence <= 0
       ) {
         return null;
@@ -127,27 +388,127 @@ function LandmarkCanvas({
 
 
       /*
-       * Abaikan titik yang terlalu jauh
-       * di luar area kamera.
+       * MediaPipe kadang menghasilkan
+       * landmark sedikit di luar 0..1.
+       *
+       * Jangan langsung buang titik yang
+       * hanya sedikit keluar frame.
        */
       if (
-        x < -0.08 ||
-        x > 1.08 ||
-        y < -0.08 ||
-        y > 1.08
+        normalizedX < -0.15
+        ||
+        normalizedX > 1.15
+        ||
+        normalizedY < -0.15
+        ||
+        normalizedY > 1.15
       ) {
         return null;
       }
 
 
+      let displayX;
+      let displayY;
+
+
+      /* =====================
+         FALLBACK
+      ===================== */
+
+      if (
+        projection.mode ===
+        "fallback"
+      ) {
+        displayX =
+          normalizedX
+          *
+          displayWidth;
+
+
+        displayY =
+          normalizedY
+          *
+          displayHeight;
+      }
+
+
+      /* =====================
+         OBJECT-FIT COVER
+      ===================== */
+
+      else {
+        /*
+         * normalized coordinate
+         * ->
+         * pixel source video
+         */
+        const sourceX =
+          normalizedX
+          *
+          projection
+            .sourceWidth;
+
+
+        const sourceY =
+          normalizedY
+          *
+          projection
+            .sourceHeight;
+
+
+        /*
+         * pixel source
+         * ->
+         * rendered object-fit cover
+         */
+        displayX =
+          projection.offsetX
+          +
+          (
+            sourceX
+            *
+            projection.scale
+          );
+
+
+        displayY =
+          projection.offsetY
+          +
+          (
+            sourceY
+            *
+            projection.scale
+          );
+      }
+
+
+      /*
+       * Preview kamera di CSS:
+       *
+       * transform: scaleX(-1)
+       *
+       * Backend menerima frame ORIGINAL,
+       * bukan mirror.
+       *
+       * Jadi overlay harus dibalik
+       * setelah projection selesai.
+       */
+      if (
+        mirroredRef.current
+      ) {
+        displayX =
+          displayWidth
+          -
+          displayX;
+      }
+
+
       return {
         x:
-          mirrored
-            ? (1 - x) * width
-            : x * width,
+          displayX,
 
         y:
-          y * height,
+          displayY,
 
         confidence,
       };
@@ -165,7 +526,8 @@ function LandmarkCanvas({
       color,
     ) => {
       if (
-        !pointA ||
+        !pointA
+        ||
         !pointB
       ) {
         return;
@@ -173,67 +535,88 @@ function LandmarkCanvas({
 
 
       if (
-        pointA.confidence < 0.15 ||
-        pointB.confidence < 0.15
+        pointA.confidence <
+          0.15
+        ||
+        pointB.confidence <
+          0.15
       ) {
         return;
       }
 
 
       /*
-       * Outline gelap.
+       * Shadow / outline
+       * agar garis tetap terlihat
+       * di background terang.
        */
       context.beginPath();
+
 
       context.moveTo(
         pointA.x,
         pointA.y,
       );
 
+
       context.lineTo(
         pointB.x,
         pointB.y,
       );
 
-      context.strokeStyle =
-        "rgba(4, 7, 10, 0.9)";
 
-      context.lineWidth = 3.8;
+      context.strokeStyle =
+        "rgba(3, 7, 18, 0.88)";
+
+
+      context.lineWidth =
+        4;
+
 
       context.lineCap =
         "round";
 
+
       context.lineJoin =
         "round";
+
 
       context.stroke();
 
 
       /*
-       * Garis tangan utama.
+       * Garis utama.
        */
       context.beginPath();
+
 
       context.moveTo(
         pointA.x,
         pointA.y,
       );
 
+
       context.lineTo(
         pointB.x,
         pointB.y,
       );
 
+
       context.strokeStyle =
         color;
 
-      context.lineWidth = 1.8;
+
+      context.lineWidth =
+        1.9;
+
 
       context.lineCap =
         "round";
 
+
       context.lineJoin =
         "round";
+
 
       context.stroke();
     };
@@ -246,30 +629,50 @@ function LandmarkCanvas({
     const drawHandSkeleton = (
       context,
       points,
-      width,
-      height,
+      displayWidth,
+      displayHeight,
+      projection,
       color,
     ) => {
-      if (!Array.isArray(points)) {
+      if (
+        !Array.isArray(
+          points
+        )
+      ) {
         return;
       }
 
 
       HAND_CONNECTIONS.forEach(
-        ([startIndex, endIndex]) => {
+        ([
+          startIndex,
+          endIndex,
+        ]) => {
           const pointA =
             getDisplayPoint(
-              points[startIndex],
-              width,
-              height,
+              points[
+                startIndex
+              ],
+
+              displayWidth,
+
+              displayHeight,
+
+              projection,
             );
 
 
           const pointB =
             getDisplayPoint(
-              points[endIndex],
-              width,
-              height,
+              points[
+                endIndex
+              ],
+
+              displayWidth,
+
+              displayHeight,
+
+              projection,
             );
 
 
@@ -279,7 +682,7 @@ function LandmarkCanvas({
             pointB,
             color,
           );
-        },
+        }
       );
     };
 
@@ -291,126 +694,200 @@ function LandmarkCanvas({
     const drawPointGroup = (
       context,
       points,
-      width,
-      height,
+      displayWidth,
+      displayHeight,
+      projection,
       color,
       {
         radius = 3,
         minConfidence = 0.15,
       } = {},
     ) => {
-      if (!Array.isArray(points)) {
+      if (
+        !Array.isArray(
+          points
+        )
+      ) {
         return;
       }
 
 
-      points.forEach((point) => {
-        const displayPoint =
-          getDisplayPoint(
-            point,
-            width,
-            height,
+      points.forEach(
+        (point) => {
+          const displayPoint =
+            getDisplayPoint(
+              point,
+
+              displayWidth,
+
+              displayHeight,
+
+              projection,
+            );
+
+
+          if (!displayPoint) {
+            return;
+          }
+
+
+          if (
+            displayPoint
+              .confidence
+            <
+            minConfidence
+          ) {
+            return;
+          }
+
+
+          /*
+           * Titik yang sudah ter-crop
+           * oleh object-fit cover
+           * tidak perlu digambar.
+           */
+          if (
+            displayPoint.x < 0
+            ||
+            displayPoint.x >
+              displayWidth
+            ||
+            displayPoint.y < 0
+            ||
+            displayPoint.y >
+              displayHeight
+          ) {
+            return;
+          }
+
+
+          /*
+           * Outline.
+           */
+          context.beginPath();
+
+
+          context.arc(
+            displayPoint.x,
+            displayPoint.y,
+            radius + 1.2,
+            0,
+            Math.PI * 2,
           );
 
 
-        if (!displayPoint) {
-          return;
+          context.fillStyle =
+            "rgba(3, 7, 18, 0.82)";
+
+
+          context.fill();
+
+
+          /*
+           * Main point.
+           */
+          context.beginPath();
+
+
+          context.arc(
+            displayPoint.x,
+            displayPoint.y,
+            radius,
+            0,
+            Math.PI * 2,
+          );
+
+
+          context.fillStyle =
+            color;
+
+
+          context.fill();
         }
-
-
-        if (
-          displayPoint.confidence <
-          minConfidence
-        ) {
-          return;
-        }
-
-
-        context.beginPath();
-
-        context.arc(
-          displayPoint.x,
-          displayPoint.y,
-          radius,
-          0,
-          Math.PI * 2,
-        );
-
-
-        context.fillStyle =
-          color;
-
-        context.fill();
-
-
-        context.lineWidth =
-          1.3;
-
-        context.strokeStyle =
-          "rgba(4, 7, 10, 0.9)";
-
-        context.stroke();
-      });
+      );
     };
 
 
     /* =========================
-       BODY POINTS
+       DRAW BODY
     ========================= */
 
     const drawBodyPoints = (
       context,
-      width,
-      height,
+      displayWidth,
+      displayHeight,
+      projection,
+      currentLandmarks,
     ) => {
       /*
-       * Backend:
+       * Backend pose compact:
        *
        * 0 nose
-       * 1 L shoulder
-       * 2 R shoulder
-       * 3 L elbow
-       * 4 R elbow
-       * 5 L wrist
-       * 6 R wrist
-       * 7 L hip
-       * 8 R hip
+       * 1 left shoulder
+       * 2 right shoulder
+       * 3 left elbow
+       * 4 right elbow
+       * 5 left wrist
+       * 6 right wrist
+       * 7 left hip
+       * 8 right hip
        *
-       * Semua tetap tersedia untuk model.
        * Overlay hanya titik.
        */
       drawPointGroup(
         context,
-        landmarks.pose,
-        width,
-        height,
-        "#62c7e8",
+
+        currentLandmarks.pose,
+
+        displayWidth,
+
+        displayHeight,
+
+        projection,
+
+        "#38bdf8",
+
         {
-          radius: 3.1,
-          minConfidence: 0.55,
+          radius:
+            3,
+
+          minConfidence:
+            0.55,
         },
       );
     };
 
 
     /* =========================
-       FACE POINTS
+       DRAW FACE
     ========================= */
 
     const drawFacePoints = (
       context,
-      width,
-      height,
+      displayWidth,
+      displayHeight,
+      projection,
+      currentLandmarks,
     ) => {
       drawPointGroup(
         context,
-        landmarks.face,
-        width,
-        height,
-        "#e7c866",
+
+        currentLandmarks.face,
+
+        displayWidth,
+
+        displayHeight,
+
+        projection,
+
+        "#f8c95f",
+
         {
-          radius: 2.6,
-          minConfidence: 0.4,
+          radius:
+            2.5,
+
+          minConfidence:
+            0.4,
         },
       );
     };
@@ -420,199 +897,328 @@ function LandmarkCanvas({
        DRAW EVERYTHING
     ========================= */
 
-    const drawLandmarks = () => {
-      const context =
-        canvas.getContext("2d");
+    const drawLandmarks =
+      () => {
+        const context =
+          canvas.getContext(
+            "2d"
+          );
 
 
-      if (!context) {
-        return;
-      }
+        if (!context) {
+          return;
+        }
 
 
-      const pixelRatio =
-        window.devicePixelRatio ||
-        1;
+        const pixelRatio =
+          window
+            .devicePixelRatio
+          ||
+          1;
 
 
-      const width =
-        canvas.width /
-        pixelRatio;
+        /*
+         * Canvas backing resolution
+         * berbeda dari CSS size.
+         */
+        const displayWidth =
+          canvas.width
+          /
+          pixelRatio;
 
 
-      const height =
-        canvas.height /
-        pixelRatio;
+        const displayHeight =
+          canvas.height
+          /
+          pixelRatio;
 
 
-      context.setTransform(
-        pixelRatio,
-        0,
-        0,
-        pixelRatio,
-        0,
-        0,
-      );
+        if (
+          displayWidth <= 0
+          ||
+          displayHeight <= 0
+        ) {
+          return;
+        }
 
 
-      context.clearRect(
-        0,
-        0,
-        width,
-        height,
-      );
+        /*
+         * Gunakan CSS coordinate
+         * setelah transform DPR.
+         */
+        context.setTransform(
+          pixelRatio,
+          0,
+          0,
+          pixelRatio,
+          0,
+          0,
+        );
 
 
-      /* =========================
-         HAND LINES
-      ========================= */
-
-      drawHandSkeleton(
-        context,
-        landmarks.leftHand,
-        width,
-        height,
-        "#63d98b",
-      );
+        context.clearRect(
+          0,
+          0,
+          displayWidth,
+          displayHeight,
+        );
 
 
-      drawHandSkeleton(
-        context,
-        landmarks.rightHand,
-        width,
-        height,
-        "#d66fd6",
-      );
+        const currentLandmarks =
+          landmarksRef.current
+          ??
+          EMPTY_LANDMARKS;
 
 
-      /* =========================
-         HAND POINTS
-      ========================= */
-
-      drawPointGroup(
-        context,
-        landmarks.leftHand,
-        width,
-        height,
-        "#63d98b",
-        {
-          radius: 3.3,
-          minConfidence: 0.15,
-        },
-      );
+        const projection =
+          getVideoProjection(
+            displayWidth,
+            displayHeight,
+          );
 
 
-      drawPointGroup(
-        context,
-        landmarks.rightHand,
-        width,
-        height,
-        "#d66fd6",
-        {
-          radius: 3.3,
-          minConfidence: 0.15,
-        },
-      );
+        /* =====================
+           HAND SKELETON
+        ===================== */
+
+        drawHandSkeleton(
+          context,
+
+          currentLandmarks
+            .leftHand,
+
+          displayWidth,
+
+          displayHeight,
+
+          projection,
+
+          "#4ade80",
+        );
 
 
-      /* =========================
-         BODY = POINT ONLY
-      ========================= */
+        drawHandSkeleton(
+          context,
 
-      drawBodyPoints(
-        context,
-        width,
-        height,
-      );
+          currentLandmarks
+            .rightHand,
+
+          displayWidth,
+
+          displayHeight,
+
+          projection,
+
+          "#e879f9",
+        );
 
 
-      /* =========================
-         FACE = POINT ONLY
-      ========================= */
+        /* =====================
+           HAND POINTS
+        ===================== */
 
-      drawFacePoints(
-        context,
-        width,
-        height,
-      );
-    };
+        drawPointGroup(
+          context,
+
+          currentLandmarks
+            .leftHand,
+
+          displayWidth,
+
+          displayHeight,
+
+          projection,
+
+          "#4ade80",
+
+          {
+            radius:
+              3.2,
+
+            minConfidence:
+              0.15,
+          },
+        );
+
+
+        drawPointGroup(
+          context,
+
+          currentLandmarks
+            .rightHand,
+
+          displayWidth,
+
+          displayHeight,
+
+          projection,
+
+          "#e879f9",
+
+          {
+            radius:
+              3.2,
+
+            minConfidence:
+              0.15,
+          },
+        );
+
+
+        /* =====================
+           BODY
+        ===================== */
+
+        drawBodyPoints(
+          context,
+
+          displayWidth,
+
+          displayHeight,
+
+          projection,
+
+          currentLandmarks,
+        );
+
+
+        /* =====================
+           FACE
+        ===================== */
+
+        drawFacePoints(
+          context,
+
+          displayWidth,
+
+          displayHeight,
+
+          projection,
+
+          currentLandmarks,
+        );
+      };
 
 
     /* =========================
-       RESIZE
+       DRAW SCHEDULER
     ========================= */
 
-    const resizeCanvas = () => {
-      const rect =
-        parent.getBoundingClientRect();
+    const scheduleDraw =
+      () => {
+        if (
+          animationFrameId !==
+          null
+        ) {
+          cancelAnimationFrame(
+            animationFrameId
+          );
+        }
 
 
-      const pixelRatio =
-        window.devicePixelRatio ||
-        1;
+        animationFrameId =
+          requestAnimationFrame(
+            () => {
+              animationFrameId =
+                null;
 
 
-      const displayWidth =
-        Math.max(
-          1,
-          Math.round(
-            rect.width,
-          ),
-        );
+              drawLandmarks();
+            }
+          );
+      };
 
 
-      const displayHeight =
-        Math.max(
-          1,
-          Math.round(
-            rect.height,
-          ),
-        );
-
-
-      canvas.width =
-        Math.round(
-          displayWidth *
-          pixelRatio,
-        );
-
-
-      canvas.height =
-        Math.round(
-          displayHeight *
-          pixelRatio,
-        );
-
-
-      canvas.style.width =
-        `${displayWidth}px`;
-
-
-      canvas.style.height =
-        `${displayHeight}px`;
-
-
-      drawLandmarks();
-    };
+    /*
+     * Expose scheduler untuk
+     * effect landmark di atas.
+     */
+    requestDrawRef.current =
+      scheduleDraw;
 
 
     /* =========================
-       DRAW SCHEDULE
+       RESIZE CANVAS
     ========================= */
 
-    const scheduleDraw = () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(
-          animationFrameId,
-        );
-      }
+    const resizeCanvas =
+      () => {
+        const rect =
+          parent
+            .getBoundingClientRect();
 
 
-      animationFrameId =
-        requestAnimationFrame(
-          drawLandmarks,
-        );
-    };
+        const pixelRatio =
+          window
+            .devicePixelRatio
+          ||
+          1;
+
+
+        const displayWidth =
+          Math.max(
+            1,
+
+            Math.round(
+              rect.width
+            )
+          );
+
+
+        const displayHeight =
+          Math.max(
+            1,
+
+            Math.round(
+              rect.height
+            )
+          );
+
+
+        const backingWidth =
+          Math.round(
+            displayWidth
+            *
+            pixelRatio
+          );
+
+
+        const backingHeight =
+          Math.round(
+            displayHeight
+            *
+            pixelRatio
+          );
+
+
+        if (
+          canvas.width !==
+          backingWidth
+        ) {
+          canvas.width =
+            backingWidth;
+        }
+
+
+        if (
+          canvas.height !==
+          backingHeight
+        ) {
+          canvas.height =
+            backingHeight;
+        }
+
+
+        canvas.style.width =
+          `${displayWidth}px`;
+
+
+        canvas.style.height =
+          `${displayHeight}px`;
+
+
+        scheduleDraw();
+      };
 
 
     /* =========================
@@ -620,36 +1226,118 @@ function LandmarkCanvas({
     ========================= */
 
     const resizeObserver =
-      new ResizeObserver(() => {
-        resizeCanvas();
-      });
+      new ResizeObserver(
+        () => {
+          resizeCanvas();
+        }
+      );
 
 
     resizeObserver.observe(
-      parent,
+      parent
     );
 
 
+    /* =========================
+       VIDEO EVENTS
+    ========================= */
+
+    const handleVideoMetadata =
+      () => {
+        /*
+         * videoWidth/videoHeight
+         * baru valid setelah metadata
+         * tersedia.
+         */
+        scheduleDraw();
+      };
+
+
+    const handleVideoResize =
+      () => {
+        scheduleDraw();
+      };
+
+
+    if (video) {
+      video.addEventListener(
+        "loadedmetadata",
+        handleVideoMetadata
+      );
+
+
+      video.addEventListener(
+        "resize",
+        handleVideoResize
+      );
+
+
+      video.addEventListener(
+        "playing",
+        handleVideoMetadata
+      );
+    }
+
+
+    /* =========================
+       INITIAL
+    ========================= */
+
     resizeCanvas();
+
+
     scheduleDraw();
 
 
+    /* =========================
+       CLEANUP
+    ========================= */
+
     return () => {
-      resizeObserver.disconnect();
+      resizeObserver
+        .disconnect();
 
 
-      if (animationFrameId) {
-        cancelAnimationFrame(
-          animationFrameId,
+      if (video) {
+        video.removeEventListener(
+          "loadedmetadata",
+          handleVideoMetadata
+        );
+
+
+        video.removeEventListener(
+          "resize",
+          handleVideoResize
+        );
+
+
+        video.removeEventListener(
+          "playing",
+          handleVideoMetadata
         );
       }
+
+
+      if (
+        animationFrameId !==
+        null
+      ) {
+        cancelAnimationFrame(
+          animationFrameId
+        );
+      }
+
+
+      requestDrawRef.current =
+        () => {};
     };
 
-  }, [
-    landmarks,
-    mirrored,
-  ]);
+  }, []);
 
+
+  /* =========================
+     VIEW
+  ========================= */
 
   return (
     <canvas
