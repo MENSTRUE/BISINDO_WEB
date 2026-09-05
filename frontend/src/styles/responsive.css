@@ -1,0 +1,2175 @@
+/* =========================================
+   BISINDO AI
+   RESPONSIVE LAYOUT SYSTEM
+========================================= */
+
+
+/* =========================================
+   DEFAULT
+========================================= */
+
+.mobile-navigation {
+  display: none;
+}
+
+
+/*
+ * Mencegah grid/flex child
+ * memaksa viewport melebar.
+ */
+.app-layout,
+.app-workspace,
+.app-content,
+
+.dashboard-page,
+.recognition-page,
+.learning-page,
+.history-page,
+.models-page,
+.settings-page {
+  min-width: 0;
+}
+
+
+img,
+video,
+canvas {
+  max-width: 100%;
+}
+
+
+/* =========================================
+   LARGE DESKTOP
+   >= 1440
+========================================= */
+
+@media (
+  min-width: 1440px
+) {
+  .app-content {
+    padding:
+      32px 36px;
+  }
+
+
+  .dashboard-page,
+  .recognition-page,
+  .learning-page,
+  .history-page,
+  .models-page,
+  .settings-page {
+    width: 100%;
+  }
+}
+
+
+/* =========================================
+   LAPTOP
+   1151 - 1439
+========================================= */
+
+@media (
+  min-width: 1151px
+)
+and
+(
+  max-width: 1439px
+) {
+  .app-content {
+    padding: 26px;
+  }
+
+
+  .dashboard-hero,
+  .models-hero {
+    padding: 28px;
+  }
+}
+
+
+/* =========================================
+   TABLET / SMALL LAPTOP
+   <= 1150
+========================================= */
+
+@media (
+  max-width: 1150px
+) {
+  /* =========================
+     LAYOUT
+  ========================= */
+
+  .app-layout {
+    grid-template-columns:
+      82px
+      minmax(
+        0,
+        1fr
+      );
+  }
+
+
+  .app-content {
+    padding: 22px;
+  }
+
+
+  /* =========================
+     SIDEBAR
+  ========================= */
+
+  .sidebar {
+    padding:
+      18px 10px;
+  }
+
+
+  .sidebar-brand {
+    justify-content: center;
+
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+
+  .sidebar-brand-text,
+  .sidebar-section-label,
+  .sidebar-nav-label,
+  .sidebar-active-indicator,
+  .sidebar-version div {
+    display: none;
+  }
+
+
+  .sidebar-nav-item {
+    min-height: 46px;
+
+    padding: 0;
+
+    justify-content: center;
+  }
+
+
+  .sidebar-nav-icon {
+    width: auto;
+  }
+
+
+  .sidebar-version {
+    justify-content: center;
+
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+
+  /* =========================
+     HEADER
+  ========================= */
+
+  .main-header {
+    min-height: 76px;
+
+    padding:
+      13px 22px;
+  }
+
+
+  .header-control-card {
+    padding:
+      7px 9px;
+  }
+
+
+  .header-control-content {
+    display: none;
+  }
+
+
+  .header-control-icon {
+    width: 33px;
+    height: 33px;
+  }
+
+
+  /* =========================
+     DASHBOARD
+  ========================= */
+
+  .dashboard-stats-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  .dashboard-bottom-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  /* =========================
+     RECOGNITION
+  ========================= */
+
+  .recognition-workspace {
+    grid-template-columns:
+      minmax(
+        0,
+        1.35fr
+      )
+      minmax(
+        280px,
+        0.65fr
+      );
+  }
+
+
+  .prediction-metrics {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  /* =========================
+     LEARNING
+  ========================= */
+
+  .gesture-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  /* =========================
+     HISTORY
+  ========================= */
+
+  .history-stats-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  .history-session-card {
+    grid-template-columns:
+      155px
+      minmax(
+        0,
+        1fr
+      )
+      auto;
+  }
+
+
+  .history-session-meta {
+    display: none;
+  }
+
+
+  /* =========================
+     MODELS
+  ========================= */
+
+  .models-metrics-grid,
+  .model-input-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  .model-class-grid {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  /* =========================
+     SETTINGS
+  ========================= */
+
+  .settings-config-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+}
+
+
+/* =========================================
+   TABLET PORTRAIT
+   <= 900
+========================================= */
+
+@media (
+  max-width: 900px
+) {
+  /* =========================
+     LAYOUT
+  ========================= */
+
+  .app-layout {
+    grid-template-columns:
+      76px
+      minmax(
+        0,
+        1fr
+      );
+  }
+
+
+  .app-content {
+    padding:
+      20px;
+  }
+
+
+  /* =========================
+     HEADER
+  ========================= */
+
+  .header-title-group h1 {
+    font-size: 15px;
+  }
+
+
+  /* =========================
+     DASHBOARD
+  ========================= */
+
+  .dashboard-hero {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .dashboard-hero-visual {
+    min-height: 180px;
+  }
+
+
+  /* =========================
+     RECOGNITION
+  ========================= */
+
+  .recognition-workspace {
+    min-height: 0;
+
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .recognition-result-panel {
+    min-height: auto;
+  }
+
+
+  .prediction-metrics {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  /* =========================
+     LEARNING
+  ========================= */
+
+  .learning-hero {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .gesture-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  /* =========================
+     HISTORY
+  ========================= */
+
+  .history-toolbar {
+    align-items: stretch;
+
+    flex-wrap: wrap;
+  }
+
+
+  .history-search {
+    width: 100%;
+
+    flex-basis: 100%;
+  }
+
+
+  .history-clear-button {
+    margin-left: 0;
+  }
+
+
+  .history-session-card {
+    grid-template-columns:
+      minmax(
+        0,
+        1fr
+      )
+      auto;
+
+    gap: 12px;
+  }
+
+
+  .history-session-transcript {
+    grid-column:
+      1 / -1;
+
+    grid-row: 2;
+  }
+
+
+  /* =========================
+     MODELS
+  ========================= */
+
+  .models-hero,
+  .models-detail-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .models-hero-visual {
+    min-height: 185px;
+  }
+
+
+  .model-class-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  /* =========================
+     SETTINGS
+  ========================= */
+
+  .appearance-grid,
+  .settings-data-list {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+
+/* =========================================
+   MOBILE
+   <= 640
+========================================= */
+
+@media (
+  max-width: 640px
+) {
+  /* =====================================
+     ROOT / BODY
+  ===================================== */
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+
+  body {
+    overflow-x: hidden;
+  }
+
+
+  /* =====================================
+     LAYOUT
+  ===================================== */
+
+  .app-layout {
+    display: block;
+
+    min-height:
+      100dvh;
+  }
+
+
+  /*
+   * Desktop sidebar hilang.
+   * Digantikan bottom navigation.
+   */
+  .app-sidebar {
+    display: none;
+  }
+
+
+  .app-workspace {
+    width: 100%;
+
+    min-height:
+      100dvh;
+  }
+
+
+  .app-content {
+    width: 100%;
+
+    padding:
+      18px
+      15px
+      calc(
+        96px
+        +
+        env(
+          safe-area-inset-bottom
+        )
+      );
+
+    overflow-x: hidden;
+  }
+
+
+  /* =====================================
+     HEADER
+  ===================================== */
+
+  .main-header {
+    position: sticky;
+
+    z-index: 800;
+
+    top: 0;
+
+    min-height: 64px;
+
+    padding:
+      10px 15px;
+
+    gap: 10px;
+
+    backdrop-filter:
+      blur(
+        18px
+      );
+  }
+
+
+  .header-title-group {
+    flex: 1;
+
+    min-width: 0;
+  }
+
+
+  .header-eyebrow {
+    margin-bottom: 2px;
+
+    font-size: 7px;
+  }
+
+
+  .header-title-group h1 {
+    overflow: hidden;
+
+    max-width: 185px;
+
+    font-size: 13px;
+
+    white-space: nowrap;
+
+    text-overflow: ellipsis;
+  }
+
+
+  .header-controls {
+    flex-shrink: 0;
+
+    gap: 5px;
+  }
+
+
+  /*
+   * Model card tidak terlalu
+   * penting di header HP.
+   */
+  .header-controls
+  .header-control-card:first-child {
+    display: none;
+  }
+
+
+  .header-control-card {
+    min-height: auto;
+
+    padding: 4px;
+
+    border-radius: 9px;
+  }
+
+
+  .header-control-content {
+    display: none;
+  }
+
+
+  .header-control-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+
+  /* =====================================
+     MOBILE NAVIGATION
+  ===================================== */
+
+  .mobile-navigation {
+    position: fixed;
+
+    z-index: 1000;
+
+    right: 0;
+    bottom: 0;
+    left: 0;
+
+    display: block;
+
+    padding:
+      0
+      8px
+      env(
+        safe-area-inset-bottom
+      );
+
+    border-top:
+      1px solid
+      var(
+        --border
+      );
+
+    background:
+      color-mix(
+        in srgb,
+        var(
+          --sidebar-background
+        )
+        94%,
+        transparent
+      );
+
+    backdrop-filter:
+      blur(
+        18px
+      );
+
+    box-shadow:
+      0
+      -10px
+      35px
+      rgba(
+        2,
+        8,
+        23,
+        0.16
+      );
+  }
+
+
+  .mobile-navigation-inner {
+    width: 100%;
+    max-width: 640px;
+
+    min-height: 68px;
+
+    margin: 0 auto;
+
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        6,
+        minmax(
+          0,
+          1fr
+        )
+      );
+
+    align-items: stretch;
+  }
+
+
+  .mobile-nav-item {
+    position: relative;
+
+    min-width: 0;
+    min-height: 68px;
+
+    padding:
+      8px
+      2px
+      7px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 4px;
+
+    color:
+      var(
+        --text-muted
+      );
+
+    text-decoration: none;
+
+    -webkit-tap-highlight-color:
+      transparent;
+  }
+
+
+  .mobile-nav-icon {
+    position: relative;
+
+    width: 34px;
+    height: 28px;
+
+    display: grid;
+
+    place-items: center;
+
+    border-radius: 9px;
+
+    transition:
+      background
+        150ms ease,
+      color
+        150ms ease,
+      transform
+        150ms ease;
+  }
+
+
+  .mobile-nav-label {
+    overflow: hidden;
+
+    width: 100%;
+
+    font-size: 7px;
+    font-weight: 600;
+
+    text-align: center;
+
+    white-space: nowrap;
+
+    text-overflow: ellipsis;
+  }
+
+
+  .mobile-nav-item.active {
+    color:
+      var(
+        --accent-soft
+      );
+  }
+
+
+  .mobile-nav-item.active
+  .mobile-nav-icon {
+    background:
+      rgba(
+        59,
+        130,
+        246,
+        0.12
+      );
+
+    color:
+      var(
+        --accent-soft
+      );
+  }
+
+
+  .mobile-nav-item:active
+  .mobile-nav-icon {
+    transform:
+      scale(
+        0.92
+      );
+  }
+
+
+  .mobile-nav-indicator {
+    position: absolute;
+
+    top: 0;
+
+    width: 23px;
+    height: 2px;
+
+    border-radius:
+      0
+      0
+      999px
+      999px;
+
+    background:
+      var(
+        --accent
+      );
+
+    box-shadow:
+      0
+      2px
+      9px
+      rgba(
+        59,
+        130,
+        246,
+        0.5
+      );
+  }
+
+
+  html[data-theme="light"]
+  .mobile-navigation {
+    background:
+      rgba(
+        255,
+        255,
+        255,
+        0.94
+      );
+
+    box-shadow:
+      0
+      -8px
+      28px
+      rgba(
+        15,
+        23,
+        42,
+        0.07
+      );
+  }
+
+
+  /* =====================================
+     COMMON PAGE HEADINGS
+  ===================================== */
+
+  .dashboard-page,
+  .recognition-page,
+  .learning-page,
+  .history-page,
+  .models-page,
+  .settings-page {
+    gap: 18px;
+  }
+
+
+  .dashboard-heading,
+  .recognition-heading,
+  .learning-heading,
+  .history-heading,
+  .models-heading,
+  .settings-heading {
+    align-items: stretch;
+
+    flex-direction: column;
+
+    gap: 13px;
+  }
+
+
+  .dashboard-heading h2,
+  .recognition-heading h2,
+  .learning-heading h2,
+  .history-heading h2,
+  .models-heading h2,
+  .settings-heading h2 {
+    font-size: 24px;
+
+    line-height: 1.15;
+  }
+
+
+  .dashboard-heading p,
+  .recognition-heading p,
+  .learning-heading p,
+  .history-heading p,
+  .models-heading p,
+  .settings-heading p {
+    font-size: 11px;
+
+    line-height: 1.65;
+  }
+
+
+  /* =====================================
+     DASHBOARD
+  ===================================== */
+
+  .dashboard-primary-action {
+    align-self: flex-start;
+
+    min-height: 39px;
+  }
+
+
+  .dashboard-hero {
+    min-height: auto;
+
+    padding:
+      23px
+      18px;
+
+    grid-template-columns:
+      1fr;
+
+    gap: 0;
+
+    border-radius: 14px;
+  }
+
+
+  .dashboard-hero h3 {
+    font-size: 27px;
+
+    line-height: 1.12;
+  }
+
+
+  .dashboard-hero-content > p {
+    font-size: 11px;
+
+    line-height: 1.7;
+  }
+
+
+  .dashboard-hero-actions {
+    margin-top: 19px;
+
+    flex-wrap: wrap;
+  }
+
+
+  .dashboard-hero-visual {
+    display: none;
+  }
+
+
+  .dashboard-stats-grid {
+    grid-template-columns:
+      1fr;
+
+    gap: 9px;
+  }
+
+
+  .dashboard-stat-card {
+    padding: 15px;
+  }
+
+
+  .dashboard-bottom-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .dashboard-panel {
+    padding: 16px;
+  }
+
+
+  .dashboard-empty-state {
+    min-height: 165px;
+  }
+
+
+  .dashboard-quick-item {
+    min-height: 56px;
+  }
+
+
+  /* =====================================
+     RECOGNITION
+  ===================================== */
+
+  .recognition-heading-status {
+    align-self: flex-start;
+  }
+
+
+  .recognition-workspace {
+    min-height: 0;
+
+    grid-template-columns:
+      1fr;
+
+    gap: 11px;
+  }
+
+
+  .camera-panel,
+  .recognition-result-panel,
+  .transcript-panel {
+    padding: 13px;
+
+    border-radius: 12px;
+  }
+
+
+  .camera-panel-header,
+  .result-panel-header {
+    min-height: 44px;
+  }
+
+
+  .camera-preview {
+    width: 100%;
+
+    aspect-ratio:
+      4 / 3;
+
+    border-radius: 10px;
+  }
+
+
+  .camera-corner {
+    width: 20px;
+    height: 20px;
+  }
+
+
+  .camera-corner.top-left {
+    top: 17px;
+    left: 17px;
+  }
+
+
+  .camera-corner.top-right {
+    top: 17px;
+    right: 17px;
+  }
+
+
+  .camera-corner.bottom-left {
+    bottom: 17px;
+    left: 17px;
+  }
+
+
+  .camera-corner.bottom-right {
+    right: 17px;
+    bottom: 17px;
+  }
+
+
+  .camera-overlay-badge {
+    top: 9px;
+    left: 9px;
+
+    font-size: 7px;
+  }
+
+
+  .camera-placeholder-icon {
+    width: 55px;
+    height: 55px;
+
+    margin-bottom: 11px;
+
+    border-radius: 16px;
+  }
+
+
+  .camera-controls {
+    min-height: auto;
+
+    padding-top: 11px;
+
+    flex-wrap: wrap;
+  }
+
+
+  .recognition-control {
+    min-height: 37px;
+  }
+
+
+  .camera-control-info {
+    width: 100%;
+
+    margin-left: 0;
+
+    padding-top: 3px;
+  }
+
+
+  .prediction-card {
+    padding:
+      22px
+      13px;
+  }
+
+
+  .prediction-metrics {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
+
+    gap: 5px;
+  }
+
+
+  .prediction-metric {
+    padding: 8px;
+
+    gap: 6px;
+  }
+
+
+  .metric-icon {
+    width: 25px;
+    height: 25px;
+  }
+
+
+  .transcript-content {
+    min-height: 70px;
+
+    padding: 14px;
+  }
+
+
+  /* =====================================
+     LEARNING
+  ===================================== */
+
+  .learning-heading-badge {
+    align-self: flex-start;
+  }
+
+
+  .learning-hero {
+    grid-template-columns:
+      1fr;
+
+    gap: 10px;
+  }
+
+
+  .learning-hero-content {
+    padding:
+      22px
+      18px;
+  }
+
+
+  .learning-hero-content h3 {
+    font-size: 25px;
+  }
+
+
+  .learning-progress-card {
+    padding: 18px;
+  }
+
+
+  .learning-toolbar {
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+
+  .learning-search {
+    width: 100%;
+  }
+
+
+  .learning-result-count {
+    padding-left: 2px;
+  }
+
+
+  .learning-categories {
+    flex-wrap: nowrap;
+
+    margin:
+      0
+      -15px;
+
+    padding:
+      0
+      15px
+      4px;
+
+    overflow-x: auto;
+
+    scrollbar-width: none;
+  }
+
+
+  .learning-categories::-webkit-scrollbar {
+    display: none;
+  }
+
+
+  .learning-categories button {
+    flex-shrink: 0;
+  }
+
+
+  .learning-library {
+    padding: 15px;
+
+    border-radius: 12px;
+  }
+
+
+  .gesture-grid {
+    grid-template-columns:
+      1fr;
+
+    gap: 9px;
+  }
+
+
+  .gesture-card {
+    display: grid;
+
+    grid-template-columns:
+      115px
+      minmax(
+        0,
+        1fr
+      );
+  }
+
+
+  .gesture-card-preview {
+    min-height: 100%;
+
+    border-right:
+      1px solid
+      var(
+        --border
+      );
+
+    border-bottom: 0;
+  }
+
+
+  .gesture-card-content {
+    min-width: 0;
+
+    padding: 12px;
+  }
+
+
+  .gesture-preview-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+
+  .gesture-card h4 {
+    font-size: 14px;
+  }
+
+
+  .gesture-modal-backdrop {
+    padding:
+      14px;
+  }
+
+
+  .gesture-modal {
+    max-height:
+      calc(
+        100dvh
+        -
+        28px
+      );
+
+    overflow-y: auto;
+  }
+
+
+  .gesture-video-placeholder {
+    min-height: 180px;
+  }
+
+
+  /* =====================================
+     HISTORY
+  ===================================== */
+
+  .history-primary-action {
+    align-self: flex-start;
+  }
+
+
+  .history-stats-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+
+    gap: 8px;
+  }
+
+
+  .history-stat-card {
+    padding: 13px;
+  }
+
+
+  .history-stat-card > strong {
+    font-size: 15px;
+  }
+
+
+  .history-panel {
+    border-radius: 12px;
+  }
+
+
+  .history-panel-heading {
+    min-height: auto;
+
+    padding: 14px;
+  }
+
+
+  .history-toolbar {
+    padding: 11px 14px;
+
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+
+  .history-search {
+    width: 100%;
+  }
+
+
+  .history-filter-group {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  .history-filter-group button {
+    width: 100%;
+  }
+
+
+  .history-clear-button {
+    align-self: flex-start;
+
+    margin-left: 0;
+  }
+
+
+  .history-session-card {
+    min-height: 0;
+
+    padding: 13px 14px;
+
+    grid-template-columns:
+      minmax(
+        0,
+        1fr
+      )
+      auto;
+
+    gap: 10px;
+  }
+
+
+  .history-session-time {
+    min-width: 0;
+  }
+
+
+  .history-session-transcript {
+    grid-column:
+      1 / -1;
+
+    grid-row: 2;
+  }
+
+
+  .history-session-transcript strong {
+    white-space: normal;
+
+    line-height: 1.45;
+  }
+
+
+  .history-session-meta {
+    display: none;
+  }
+
+
+  .history-empty-state {
+    min-height: 330px;
+
+    padding:
+      38px
+      18px;
+  }
+
+
+  .history-empty-visual {
+    width: 100px;
+    height: 100px;
+  }
+
+
+  .history-empty-orbit.orbit-one {
+    width: 98px;
+    height: 98px;
+  }
+
+
+  .history-empty-orbit.orbit-two {
+    width: 70px;
+    height: 70px;
+  }
+
+
+  /* =====================================
+     MODELS
+  ===================================== */
+
+  .models-active-badge {
+    align-self: flex-start;
+  }
+
+
+  .models-hero {
+    min-height: auto;
+
+    padding:
+      23px
+      18px;
+
+    grid-template-columns:
+      1fr;
+
+    border-radius: 14px;
+  }
+
+
+  .models-hero h3 {
+    font-size: 25px;
+
+    line-height: 1.14;
+  }
+
+
+  .models-hero-content > p {
+    font-size: 10px;
+  }
+
+
+  .models-hero-visual {
+    display: none;
+  }
+
+
+  .models-hero-tags {
+    gap: 5px;
+  }
+
+
+  .models-hero-tags span {
+    font-size: 8px;
+  }
+
+
+  .models-metrics-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+
+    gap: 8px;
+  }
+
+
+  .models-metric-card {
+    padding: 13px;
+  }
+
+
+  .models-metric-card > strong {
+    font-size: 15px;
+  }
+
+
+  .models-detail-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .models-panel {
+    padding: 15px;
+
+    border-radius: 12px;
+  }
+
+
+  .model-information-list > div {
+    grid-template-columns:
+      minmax(
+        95px,
+        0.42fr
+      )
+      minmax(
+        0,
+        1fr
+      );
+
+    gap: 10px;
+  }
+
+
+  .model-information-list strong {
+    white-space: normal;
+
+    word-break: break-word;
+  }
+
+
+  .model-input-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .model-class-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  .models-class-search {
+    width: 100%;
+  }
+
+
+  /* =====================================
+     SETTINGS
+  ===================================== */
+
+  .settings-save-status {
+    align-self: flex-start;
+  }
+
+
+  .settings-panel {
+    padding: 15px;
+
+    border-radius: 12px;
+  }
+
+
+  .appearance-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .appearance-preview {
+    height: 135px;
+  }
+
+
+  .settings-config-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+
+    gap: 8px;
+  }
+
+
+  .settings-config-card {
+    padding: 12px;
+  }
+
+
+  .settings-data-list {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .settings-data-card {
+    grid-template-columns:
+      38px
+      minmax(
+        0,
+        1fr
+      )
+      auto;
+  }
+
+
+  .settings-danger-panel {
+    padding: 15px;
+
+    align-items: flex-start;
+
+    flex-direction: column;
+  }
+
+
+  .settings-danger-panel > button {
+    align-self: flex-start;
+  }
+}
+
+
+/* =========================================
+   SMALL MOBILE
+   <= 420
+========================================= */
+
+@media (
+  max-width: 420px
+) {
+  /* =========================
+     GLOBAL
+  ========================= */
+
+  .app-content {
+    padding:
+      15px
+      12px
+      calc(
+        92px
+        +
+        env(
+          safe-area-inset-bottom
+        )
+      );
+  }
+
+
+  /* =========================
+     HEADER
+  ========================= */
+
+  .main-header {
+    padding:
+      9px
+      12px;
+  }
+
+
+  .header-title-group h1 {
+    max-width: 145px;
+
+    font-size: 12px;
+  }
+
+
+  .header-control-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+
+  /* =========================
+     BOTTOM NAV
+  ========================= */
+
+  .mobile-navigation {
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+
+
+  .mobile-navigation-inner {
+    min-height: 65px;
+  }
+
+
+  .mobile-nav-item {
+    min-height: 65px;
+
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+
+  .mobile-nav-icon {
+    width: 31px;
+  }
+
+
+  .mobile-nav-label {
+    font-size: 6.5px;
+  }
+
+
+  /* =========================
+     HEADINGS
+  ========================= */
+
+  .dashboard-heading h2,
+  .recognition-heading h2,
+  .learning-heading h2,
+  .history-heading h2,
+  .models-heading h2,
+  .settings-heading h2 {
+    font-size: 22px;
+  }
+
+
+  /* =========================
+     DASHBOARD
+  ========================= */
+
+  .dashboard-hero {
+    padding:
+      20px
+      16px;
+  }
+
+
+  .dashboard-hero h3 {
+    font-size: 24px;
+  }
+
+
+  .dashboard-hero-actions {
+    align-items: stretch;
+
+    flex-direction: column;
+  }
+
+
+  .hero-button {
+    justify-content: center;
+  }
+
+
+  /* =========================
+     RECOGNITION
+  ========================= */
+
+  .camera-preview {
+    aspect-ratio:
+      1 / 1;
+  }
+
+
+  .prediction-metrics {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .prediction-metric {
+    min-height: 48px;
+  }
+
+
+  /* =========================
+     LEARNING
+  ========================= */
+
+  .learning-categories {
+    margin:
+      0
+      -12px;
+
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+
+  .gesture-card {
+    grid-template-columns:
+      96px
+      minmax(
+        0,
+        1fr
+      );
+  }
+
+
+  .gesture-preview-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+
+  .gesture-view-button {
+    font-size: 8px;
+  }
+
+
+  .gesture-modal-info {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  /* =========================
+     HISTORY
+  ========================= */
+
+  .history-stats-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .history-panel-count {
+    display: none;
+  }
+
+
+  /* =========================
+     MODELS
+  ========================= */
+
+  .models-metrics-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .model-class-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .model-information-list > div {
+    min-height: 54px;
+
+    align-items: flex-start;
+
+    grid-template-columns:
+      1fr;
+
+    padding:
+      9px
+      0;
+
+    gap: 3px;
+  }
+
+
+  .model-information-list strong {
+    text-align: left;
+  }
+
+
+  /* =========================
+     SETTINGS
+  ========================= */
+
+  .settings-config-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+
+  .settings-data-card {
+    grid-template-columns:
+      38px
+      minmax(
+        0,
+        1fr
+      );
+  }
+
+
+  .settings-data-action {
+    grid-column:
+      1 / -1;
+
+    justify-self: flex-start;
+
+    margin-left: 49px;
+  }
+
+
+  .settings-system-row {
+    grid-template-columns:
+      35px
+      minmax(
+        0,
+        1fr
+      );
+  }
+
+
+  .settings-system-row
+  > .system-value,
+
+  .settings-system-row
+  > .system-status {
+    grid-column: 2;
+
+    justify-self: flex-start;
+  }
+}
+
+
+/* =========================================
+   EXTRA SMALL
+   <= 350
+========================================= */
+
+@media (
+  max-width: 350px
+) {
+  .header-title-group h1 {
+    max-width: 115px;
+  }
+
+
+  .mobile-nav-label {
+    font-size: 6px;
+  }
+
+
+  .mobile-nav-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+
+
+  .gesture-card {
+    display: block;
+  }
+
+
+  .gesture-card-preview {
+    min-height: 105px;
+
+    border-right: 0;
+
+    border-bottom:
+      1px solid
+      var(
+        --border
+      );
+  }
+}
+
+
+/* =========================================
+   MOBILE LANDSCAPE
+========================================= */
+
+@media (
+  max-width: 900px
+)
+and
+(
+  orientation: landscape
+)
+and
+(
+  max-height: 500px
+) {
+  .camera-preview {
+    max-height: 70vh;
+
+    aspect-ratio:
+      16 / 9;
+  }
+
+
+  .mobile-navigation-inner,
+  .mobile-nav-item {
+    min-height: 57px;
+  }
+
+
+  .mobile-nav-item {
+    padding:
+      5px
+      2px;
+  }
+
+
+  .mobile-nav-icon {
+    height: 24px;
+  }
+
+
+  .app-content {
+    padding-bottom:
+      calc(
+        80px
+        +
+        env(
+          safe-area-inset-bottom
+        )
+      );
+  }
+}
+
+
+/* =========================================
+   TOUCH DEVICES
+========================================= */
+
+@media (
+  hover: none
+)
+and
+(
+  pointer: coarse
+) {
+  button,
+  a {
+    -webkit-tap-highlight-color:
+      transparent;
+  }
+
+
+  .learning-categories button,
+  .history-filter-group button {
+    min-height: 36px;
+  }
+
+
+  .gesture-view-button,
+  .history-primary-action,
+  .dashboard-primary-action,
+  .learning-primary-button {
+    min-height: 40px;
+  }
+}
+
+
+/* =========================================
+   REDUCED MOTION
+========================================= */
+
+@media (
+  prefers-reduced-motion:
+  reduce
+) {
+  .mobile-nav-icon,
+  .mobile-nav-item,
+  .dashboard-primary-action,
+  .history-primary-action,
+  .appearance-card {
+    transition: none;
+  }
+}
