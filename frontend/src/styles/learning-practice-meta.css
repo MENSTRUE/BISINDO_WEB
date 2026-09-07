@@ -1,0 +1,154 @@
+/* =========================================
+   CARD PRACTICE PROGRESS
+========================================= */
+
+.gesture-practice-mini {
+  margin-top: 10px;
+}
+
+
+.gesture-practice-mini > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+
+.gesture-practice-mini span {
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 7px;
+}
+
+
+.gesture-practice-mini strong {
+  color:
+    var(
+      --text-secondary
+    );
+
+  font-size: 8px;
+}
+
+
+.gesture-practice-mini-track {
+  width: 100%;
+  height: 4px;
+
+  margin-top: 5px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.12
+    );
+}
+
+
+.gesture-practice-mini-track > span {
+  display: block;
+
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #38bdf8
+    );
+}
+
+
+/* =========================================
+   MOVEMENT DESCRIPTION
+========================================= */
+
+.lesson-movement-card {
+  margin-top: 10px;
+}
+
+
+.lesson-movement-block {
+  padding:
+    9px 0;
+
+  border-bottom:
+    1px solid
+    var(
+      --border
+    );
+}
+
+
+.lesson-movement-block:last-of-type {
+  border-bottom: 0;
+}
+
+
+.lesson-movement-block > span,
+.lesson-focus-list > span {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color:
+    var(
+      --accent-soft
+    );
+
+  font-size: 7px;
+  font-weight: 700;
+
+  letter-spacing: 0.08em;
+
+  text-transform: uppercase;
+}
+
+
+.lesson-movement-block p {
+  margin: 0;
+
+  color:
+    var(
+      --text-secondary
+    );
+
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+
+.lesson-focus-list {
+  margin-top: 8px;
+}
+
+
+.lesson-focus-list ul {
+  margin: 5px 0 0;
+
+  padding-left: 17px;
+}
+
+
+.lesson-focus-list li {
+  margin-bottom: 4px;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 8px;
+  line-height: 1.5;
+}

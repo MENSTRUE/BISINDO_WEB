@@ -1,11 +1,9 @@
 import {
   ArrowRight,
   BookOpen,
-  Check,
+  CheckCircle2,
   ChevronRight,
-  CircleCheck,
   CirclePlay,
-  Eye,
   Languages,
   Lightbulb,
   MessageSquareText,
@@ -22,498 +20,53 @@ import {
   useState,
 } from "react";
 
+import {
+  LEARNING_CATEGORIES,
+  LEARNING_LESSONS,
+  PRACTICE_RULES,
+} from "../data/learningLessons";
+
+import useLearningPractice
+  from "../hooks/useLearningPractice";
+
+import LearningPracticePanel
+  from "../components/learning/LearningPracticePanel";
+
 import "../styles/learning.css";
-
-
-const STORAGE_KEY =
-  "bisindo-learning-progress-v1";
-
-
-/* =========================================
-   LESSON DATA
-========================================= */
-
-const gestures = [
-  {
-    id: 0,
-    word: "Air",
-    slug: "air",
-    category: "Dasar",
-
-    meaning:
-      "Kosakata untuk menyebut air atau sesuatu yang berkaitan dengan air.",
-
-    example:
-      "Saya minum air.",
-  },
-
-  {
-    id: 1,
-    word: "Belajar",
-    slug: "belajar",
-    category: "Aktivitas",
-
-    meaning:
-      "Kosakata untuk menyatakan kegiatan mempelajari atau memahami sesuatu.",
-
-    example:
-      "Saya belajar BISINDO.",
-  },
-
-  {
-    id: 2,
-    word: "Cari",
-    slug: "cari",
-    category: "Aktivitas",
-
-    meaning:
-      "Kosakata untuk menyatakan kegiatan mencari seseorang atau sesuatu.",
-
-    example:
-      "Saya cari teman.",
-  },
-
-  {
-    id: 3,
-    word: "Hari",
-    slug: "hari",
-    category: "Waktu",
-
-    meaning:
-      "Kosakata yang digunakan ketika membicarakan hari atau waktu dalam satu hari.",
-
-    example:
-      "Hari ini saya belajar.",
-  },
-
-  {
-    id: 4,
-    word: "Ingat",
-    slug: "ingat",
-    category: "Aktivitas",
-
-    meaning:
-      "Kosakata untuk menyatakan bahwa seseorang mengingat sesuatu.",
-
-    example:
-      "Saya ingat teman saya.",
-  },
-
-  {
-    id: 5,
-    word: "Lagi",
-    slug: "lagi",
-    category: "Dasar",
-
-    meaning:
-      "Kosakata yang dapat digunakan untuk menunjukkan pengulangan atau sesuatu yang sedang berlangsung kembali.",
-
-    example:
-      "Saya belajar lagi.",
-  },
-
-  {
-    id: 6,
-    word: "Maaf",
-    slug: "maaf",
-    category: "Dasar",
-
-    meaning:
-      "Kosakata yang digunakan untuk meminta maaf.",
-
-    example:
-      "Maaf, saya terlambat.",
-  },
-
-  {
-    id: 7,
-    word: "Makan",
-    slug: "makan",
-    category: "Aktivitas",
-
-    meaning:
-      "Kosakata untuk menyatakan aktivitas makan.",
-
-    example:
-      "Saya makan pagi.",
-  },
-
-  {
-    id: 8,
-    word: "Motor",
-    slug: "motor",
-    category: "Benda",
-
-    meaning:
-      "Kosakata yang digunakan untuk menyebut kendaraan sepeda motor.",
-
-    example:
-      "Saya berangkat naik motor.",
-  },
-
-  {
-    id: 9,
-    word: "Saya",
-    slug: "saya",
-    category: "Dasar",
-
-    meaning:
-      "Kosakata yang digunakan untuk merujuk pada diri sendiri.",
-
-    example:
-      "Saya belajar BISINDO.",
-  },
-
-  {
-    id: 10,
-    word: "Terima kasih",
-    slug: "terima-kasih",
-    category: "Dasar",
-
-    meaning:
-      "Ungkapan yang digunakan untuk menyampaikan rasa terima kasih.",
-
-    example:
-      "Terima kasih, teman.",
-  },
-
-  {
-    id: 11,
-    word: "Tuli",
-    slug: "tuli",
-    category: "Dasar",
-
-    meaning:
-      "Kosakata yang berkaitan dengan identitas atau kondisi Tuli.",
-
-    example:
-      "Dia teman Tuli saya.",
-  },
-
-  {
-    id: 12,
-    word: "Apa",
-    slug: "apa",
-    category: "Pertanyaan",
-
-    meaning:
-      "Kata tanya untuk menanyakan benda, hal, atau informasi.",
-
-    example:
-      "Apa itu?",
-  },
-
-  {
-    id: 13,
-    word: "Siapa",
-    slug: "siapa",
-    category: "Pertanyaan",
-
-    meaning:
-      "Kata tanya yang digunakan untuk menanyakan seseorang.",
-
-    example:
-      "Siapa teman kamu?",
-  },
-
-  {
-    id: 14,
-    word: "Kapan",
-    slug: "kapan",
-    category: "Pertanyaan",
-
-    meaning:
-      "Kata tanya untuk menanyakan waktu terjadinya sesuatu.",
-
-    example:
-      "Kapan kamu datang?",
-  },
-
-  {
-    id: 15,
-    word: "Di mana",
-    slug: "di-mana",
-    category: "Pertanyaan",
-
-    meaning:
-      "Kata tanya yang digunakan untuk menanyakan tempat atau lokasi.",
-
-    example:
-      "Rumah kamu di mana?",
-  },
-
-  {
-    id: 16,
-    word: "Mengapa",
-    slug: "mengapa",
-    category: "Pertanyaan",
-
-    meaning:
-      "Kata tanya untuk menanyakan alasan atau sebab.",
-
-    example:
-      "Mengapa kamu datang?",
-  },
-
-  {
-    id: 17,
-    word: "Bagaimana",
-    slug: "bagaimana",
-    category: "Pertanyaan",
-
-    meaning:
-      "Kata tanya untuk menanyakan cara, keadaan, atau kondisi.",
-
-    example:
-      "Bagaimana cara belajar BISINDO?",
-  },
-
-  {
-    id: 18,
-    word: "Merah",
-    slug: "merah",
-    category: "Warna",
-
-    meaning:
-      "Kosakata untuk menyebut warna merah.",
-
-    example:
-      "Motor itu merah.",
-  },
-
-  {
-    id: 19,
-    word: "Kuning",
-    slug: "kuning",
-    category: "Warna",
-
-    meaning:
-      "Kosakata untuk menyebut warna kuning.",
-
-    example:
-      "Baju itu kuning.",
-  },
-
-  {
-    id: 20,
-    word: "Hijau",
-    slug: "hijau",
-    category: "Warna",
-
-    meaning:
-      "Kosakata untuk menyebut warna hijau.",
-
-    example:
-      "Baju saya hijau.",
-  },
-
-  {
-    id: 21,
-    word: "Hitam",
-    slug: "hitam",
-    category: "Warna",
-
-    meaning:
-      "Kosakata untuk menyebut warna hitam.",
-
-    example:
-      "Motor saya hitam.",
-  },
-
-  {
-    id: 22,
-    word: "Dengar",
-    slug: "dengar",
-    category: "Aktivitas",
-
-    meaning:
-      "Kosakata yang berkaitan dengan aktivitas mendengar.",
-
-    example:
-      "Saya dengar suara motor.",
-  },
-
-  {
-    id: 23,
-    word: "Berangkat",
-    slug: "berangkat",
-    category: "Aktivitas",
-
-    meaning:
-      "Kosakata untuk menyatakan seseorang mulai pergi menuju suatu tempat.",
-
-    example:
-      "Saya berangkat pagi.",
-  },
-
-  {
-    id: 24,
-    word: "Datang",
-    slug: "datang",
-    category: "Aktivitas",
-
-    meaning:
-      "Kosakata untuk menyatakan seseorang tiba atau menuju suatu tempat.",
-
-    example:
-      "Teman saya datang sore.",
-  },
-
-  {
-    id: 25,
-    word: "Teman",
-    slug: "teman",
-    category: "Relasi",
-
-    meaning:
-      "Kosakata yang digunakan untuk menyebut seorang teman.",
-
-    example:
-      "Dia teman saya.",
-  },
-
-  {
-    id: 26,
-    word: "Keluarga",
-    slug: "keluarga",
-    category: "Relasi",
-
-    meaning:
-      "Kosakata yang digunakan untuk menyebut keluarga.",
-
-    example:
-      "Keluarga saya di rumah.",
-  },
-
-  {
-    id: 27,
-    word: "Rumah",
-    slug: "rumah",
-    category: "Tempat",
-
-    meaning:
-      "Kosakata yang digunakan untuk menyebut rumah atau tempat tinggal.",
-
-    example:
-      "Saya pulang ke rumah.",
-  },
-
-  {
-    id: 28,
-    word: "Pagi",
-    slug: "pagi",
-    category: "Waktu",
-
-    meaning:
-      "Kosakata untuk menyebut waktu pagi.",
-
-    example:
-      "Saya berangkat pagi.",
-  },
-
-  {
-    id: 29,
-    word: "Siang",
-    slug: "siang",
-    category: "Waktu",
-
-    meaning:
-      "Kosakata untuk menyebut waktu siang.",
-
-    example:
-      "Saya makan siang.",
-  },
-
-  {
-    id: 30,
-    word: "Sore",
-    slug: "sore",
-    category: "Waktu",
-
-    meaning:
-      "Kosakata untuk menyebut waktu sore.",
-
-    example:
-      "Teman saya datang sore.",
-  },
-
-  {
-    id: 31,
-    word: "Malam",
-    slug: "malam",
-    category: "Waktu",
-
-    meaning:
-      "Kosakata untuk menyebut waktu malam.",
-
-    example:
-      "Saya belajar malam.",
-  },
-];
-
-
-const categories = [
-  "Semua",
-  "Dasar",
-  "Aktivitas",
-  "Pertanyaan",
-  "Warna",
-  "Waktu",
-  "Relasi",
-  "Tempat",
-  "Benda",
-];
-
-
-/* =========================================
-   COMMON LEARNING TIPS
-========================================= */
-
-const learningTips = [
-  "Tonton video sampai selesai sebelum mencoba gerakan.",
-
-  "Perhatikan posisi awal tangan, bentuk jari, dan orientasi telapak tangan.",
-
-  "Perhatikan arah serta perubahan posisi tangan selama gerakan.",
-
-  "Perhatikan posisi akhir dan tempo gerakan.",
-
-  "Ulangi video beberapa kali lalu praktikkan secara perlahan.",
-];
-
-
-/* =========================================
-   VIDEO SOURCES
-========================================= */
-
-const getVideoSources =
-  (gesture) => {
-    /*
-     * Source pertama:
-     * format file yang rapi.
-     *
-     * Source kedua:
-     * fallback untuk file kamu
-     * yang sekarang masih .mp4.mp4.
-     */
-    return [
-      `/learning-videos/${gesture.slug}.mp4`,
-
-      `/learning-videos/${gesture.slug}.mp4.mp4`,
-    ];
-  };
+import "../styles/learning-practice-meta.css";
 
 
 function LearningPage() {
-  /* =====================================
-     SEARCH / FILTER
-  ===================================== */
+  /* =========================================
+     LEARNING DATA / PROGRESS
+  ========================================= */
+
+  const {
+    getLessonProgress,
+
+    registerResult,
+
+    resetLesson,
+
+    completedLessons,
+
+    overallPercent,
+  } = useLearningPractice();
+
+
+  /* =========================================
+     SEARCH
+  ========================================= */
 
   const [
     search,
     setSearch,
   ] = useState("");
 
+
+  /* =========================================
+     CATEGORY
+  ========================================= */
 
   const [
     activeCategory,
@@ -523,291 +76,268 @@ function LearningPage() {
   );
 
 
-  /* =====================================
-     MODAL
-  ===================================== */
+  /* =========================================
+     SELECTED LESSON
+  ========================================= */
 
   const [
-    selectedGesture,
-    setSelectedGesture,
+    selectedLesson,
+    setSelectedLesson,
   ] = useState(null);
 
 
+  /* =========================================
+     LESSON / PRACTICE MODE
+  ========================================= */
+
   const [
-    videoFailed,
-    setVideoFailed,
+    practiceMode,
+    setPracticeMode,
   ] = useState(false);
 
 
-  /* =====================================
-     PROGRESS
-  ===================================== */
+  /* =========================================
+     VIDEO ERROR
+  ========================================= */
 
   const [
-    learnedIds,
-    setLearnedIds,
-  ] = useState(() => {
-    try {
-      const saved =
-        localStorage.getItem(
-          STORAGE_KEY
-        );
+    videoError,
+    setVideoError,
+  ] = useState(false);
 
 
-      if (!saved) {
-        return [];
-      }
+  /* =========================================
+     FILTER LESSONS
+  ========================================= */
+
+  const filteredLessons =
+    useMemo(
+      () => {
+        const query =
+          search
+            .trim()
+            .toLowerCase();
 
 
-      const parsed =
-        JSON.parse(
-          saved
-        );
+        return LEARNING_LESSONS
+          .filter(
+            (lesson) => {
+              const categoryMatches =
+                activeCategory ===
+                  "Semua"
+                ||
+                lesson.category ===
+                  activeCategory;
 
 
-      return Array.isArray(
-        parsed
-      )
-        ? parsed
-        : [];
-    }
-
-    catch {
-      return [];
-    }
-  });
-
-
-  /* =====================================
-     STORE PROGRESS
-  ===================================== */
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        STORAGE_KEY,
-
-        JSON.stringify(
-          learnedIds
-        )
-      );
-    }
-
-    catch {
-      /*
-       * UI tetap berjalan jika
-       * localStorage gagal.
-       */
-    }
-
-  }, [
-    learnedIds,
-  ]);
+              const searchMatches =
+                !query
+                ||
+                lesson.word
+                  .toLowerCase()
+                  .includes(
+                    query
+                  )
+                ||
+                lesson.meaning
+                  .toLowerCase()
+                  .includes(
+                    query
+                  );
 
 
-  /* =====================================
-     RESET VIDEO ERROR
-  ===================================== */
-
-  useEffect(() => {
-    setVideoFailed(
-      false
-    );
-
-  }, [
-    selectedGesture,
-  ]);
-
-
-  /* =====================================
-     ESC CLOSE MODAL
-  ===================================== */
-
-  useEffect(() => {
-    if (!selectedGesture) {
-      return undefined;
-    }
-
-
-    const handleKeyDown =
-      (event) => {
-        if (
-          event.key ===
-          "Escape"
-        ) {
-          setSelectedGesture(
-            null
-          );
-        }
-      };
-
-
-    window.addEventListener(
-      "keydown",
-      handleKeyDown
-    );
-
-
-    return () => {
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown
-      );
-    };
-
-  }, [
-    selectedGesture,
-  ]);
-
-
-  /* =====================================
-     FILTER
-  ===================================== */
-
-  const filteredGestures =
-    useMemo(() => {
-      const normalizedSearch =
-        search
-          .trim()
-          .toLowerCase();
-
-
-      return gestures.filter(
-        (gesture) => {
-          const categoryMatches =
-            (
-              activeCategory ===
-              "Semua"
-            )
-            ||
-            (
-              gesture.category ===
-              activeCategory
-            );
-
-
-          const searchMatches =
-            !normalizedSearch
-            ||
-            gesture.word
-              .toLowerCase()
-              .includes(
-                normalizedSearch
-              )
-            ||
-            gesture.meaning
-              .toLowerCase()
-              .includes(
-                normalizedSearch
+              return (
+                categoryMatches
+                &&
+                searchMatches
               );
-
-
-          return (
-            categoryMatches
-            &&
-            searchMatches
+            }
           );
-        }
-      );
+      },
 
-    }, [
-      search,
-      activeCategory,
-    ]);
-
-
-  /* =====================================
-     PROGRESS CALCULATION
-  ===================================== */
-
-  const learnedCount =
-    learnedIds.length;
-
-
-  const progress =
-    Math.round(
-      (
-        learnedCount
-        /
-        gestures.length
-      )
-      *
-      100
+      [
+        search,
+        activeCategory,
+      ]
     );
 
 
-  const isLearned =
-    (id) =>
-      learnedIds.includes(
-        id
+  /* =========================================
+     OPEN LESSON
+  ========================================= */
+
+  const openLesson =
+    (lesson) => {
+      setPracticeMode(
+        false
       );
 
 
-  const toggleLearned =
-    (id) => {
-      setLearnedIds(
-        (current) => {
-          if (
-            current.includes(
-              id
-            )
-          ) {
-            return current.filter(
-              (item) =>
-                item !== id
-            );
-          }
+      setVideoError(
+        false
+      );
 
 
-          return [
-            ...current,
-            id,
-          ];
-        }
+      setSelectedLesson(
+        lesson
       );
     };
 
 
-  /* =====================================
-     OPEN NEXT LESSON
-  ===================================== */
+  /* =========================================
+     CLOSE LESSON
+  ========================================= */
+
+  const closeLesson =
+    () => {
+      setPracticeMode(
+        false
+      );
+
+
+      setVideoError(
+        false
+      );
+
+
+      setSelectedLesson(
+        null
+      );
+    };
+
+
+  /* =========================================
+     OPEN NEXT UNFINISHED LESSON
+  ========================================= */
 
   const openNextLesson =
     () => {
-      const nextGesture =
-        gestures.find(
-          (gesture) =>
-            !isLearned(
-              gesture.id
-            )
-        )
+      const nextLesson =
+        LEARNING_LESSONS
+          .find(
+            (lesson) => {
+              const progress =
+                getLessonProgress(
+                  lesson.id
+                );
+
+
+              return (
+                !progress.completed
+              );
+            }
+          )
         ??
-        gestures[0];
+        LEARNING_LESSONS[0];
 
 
-      setSelectedGesture(
-        nextGesture
+      openLesson(
+        nextLesson
       );
     };
 
 
-  /* =====================================
-     VIDEO SOURCES
-  ===================================== */
+  /* =========================================
+     ESCAPE CLOSE MODAL
+  ========================================= */
 
-  const selectedVideoSources =
-    selectedGesture
-      ? getVideoSources(
-          selectedGesture
-        )
-      : [];
+  useEffect(
+    () => {
+      if (
+        !selectedLesson
+      ) {
+        return undefined;
+      }
 
+
+      const handleKeyDown =
+        (event) => {
+          if (
+            event.key ===
+            "Escape"
+          ) {
+            setPracticeMode(
+              false
+            );
+
+
+            setVideoError(
+              false
+            );
+
+
+            setSelectedLesson(
+              null
+            );
+          }
+        };
+
+
+      window.addEventListener(
+        "keydown",
+        handleKeyDown
+      );
+
+
+      return () => {
+        window.removeEventListener(
+          "keydown",
+          handleKeyDown
+        );
+      };
+    },
+
+    [
+      selectedLesson,
+    ]
+  );
+
+
+  /* =========================================
+     BODY SCROLL LOCK
+  ========================================= */
+
+  useEffect(
+    () => {
+      if (
+        !selectedLesson
+      ) {
+        return undefined;
+      }
+
+
+      const previousOverflow =
+        document.body.style
+          .overflow;
+
+
+      document.body.style
+        .overflow =
+        "hidden";
+
+
+      return () => {
+        document.body.style
+          .overflow =
+          previousOverflow;
+      };
+    },
+
+    [
+      selectedLesson,
+    ]
+  );
+
+
+  /* =========================================
+     MAIN VIEW
+  ========================================= */
 
   return (
     <div className="learning-page">
-      {/* =================================
+      {/* =====================================
           HEADING
-      ================================= */}
+      ===================================== */}
 
       <section className="learning-heading">
         <div>
@@ -815,15 +345,25 @@ function LearningPage() {
             Learning Workspace
           </span>
 
+
           <h2>
             Belajar BISINDO
           </h2>
 
+
           <p>
-            Pelajari kosakata yang
-            tersedia pada model BISINDO
-            v1 melalui contoh video
-            gerakan secara bertahap.
+            Tonton video referensi,
+            pahami gerakannya,
+            kemudian praktikkan hingga
+            berhasil dikenali AI
+            sebanyak
+            {" "}
+            {
+              PRACTICE_RULES
+                .requiredRepetitions
+            }
+            {" "}
+            kali.
           </p>
         </div>
 
@@ -835,17 +375,24 @@ function LearningPage() {
           />
 
           <span>
-            32 Kosakata
+            {
+              LEARNING_LESSONS
+                .length
+            }
+            {" "}
+            Kosakata
           </span>
         </div>
       </section>
 
 
-      {/* =================================
+      {/* =====================================
           HERO
-      ================================= */}
+      ===================================== */}
 
       <section className="learning-hero">
+        {/* HERO CONTENT */}
+
         <div className="learning-hero-content">
           <div className="learning-hero-badge">
             <Sparkles
@@ -858,30 +405,40 @@ function LearningPage() {
 
 
           <h3>
-            Belajar satu kata,
-            satu gerakan,
-            setiap hari.
+            Tonton.
+            <br />
+
+            Pahami.
+            <br />
+
+            Praktikkan.
           </h3>
 
 
           <p>
-            Pilih kosakata,
-            tonton video contoh,
-            pahami arti dan penggunaannya,
-            lalu praktikkan gerakan
-            secara bertahap.
+            Sebuah kosakata baru dianggap
+            selesai setelah AI berhasil
+            mengenali gesture tersebut
+            minimal
+            {" "}
+            {
+              PRACTICE_RULES
+                .requiredRepetitions
+            }
+            {" "}
+            kali secara valid.
           </p>
 
 
           <button
-            className="learning-primary-button"
             type="button"
+            className="learning-primary-button"
             onClick={
               openNextLesson
             }
           >
             <Play
-              size={16}
+              size={15}
               strokeWidth={1.9}
             />
 
@@ -904,16 +461,23 @@ function LearningPage() {
                 Progress Belajar
               </span>
 
+
               <strong>
-                {learnedCount}
+                {completedLessons}
                 {" / "}
-                {gestures.length}
+                {
+                  LEARNING_LESSONS
+                    .length
+                }
               </strong>
             </div>
 
 
             <div className="learning-progress-number">
-              {progress}%
+              {
+                overallPercent
+              }
+              %
             </div>
           </div>
 
@@ -923,29 +487,39 @@ function LearningPage() {
               className="learning-progress-fill"
               style={{
                 width:
-                  `${progress}%`,
+                  `${overallPercent}%`,
               }}
             />
           </div>
 
 
           <p>
-            {learnedCount ===
-            gestures.length
+            {completedLessons ===
+            LEARNING_LESSONS.length
               ? (
-                  "Semua kosakata telah dipelajari."
+                  "Semua kosakata telah selesai dipraktikkan."
                 )
               : (
-                  `${gestures.length - learnedCount} kata lagi untuk menyelesaikan kosakata model v1.`
+                  `${
+                    LEARNING_LESSONS.length
+                    -
+                    completedLessons
+                  } kosakata belum mencapai ${
+                    PRACTICE_RULES
+                      .requiredRepetitions
+                  }/${
+                    PRACTICE_RULES
+                      .requiredRepetitions
+                  } valid.`
                 )}
           </p>
         </div>
       </section>
 
 
-      {/* =================================
+      {/* =====================================
           SEARCH
-      ================================= */}
+      ===================================== */}
 
       <section className="learning-toolbar">
         <div className="learning-search">
@@ -954,6 +528,7 @@ function LearningPage() {
             strokeWidth={1.8}
           />
 
+
           <input
             type="text"
             value={
@@ -961,12 +536,13 @@ function LearningPage() {
             }
             placeholder="Cari kosakata BISINDO..."
             onChange={
-              (event) =>
+              (event) => {
                 setSearch(
                   event
                     .target
                     .value
-                )
+                );
+              }
             }
           />
 
@@ -975,12 +551,12 @@ function LearningPage() {
             <button
               type="button"
               aria-label="Hapus pencarian"
-              onClick={() =>
-                setSearch("")
-              }
+              onClick={() => {
+                setSearch("");
+              }}
             >
               <X
-                size={15}
+                size={14}
               />
             </button>
           )}
@@ -990,41 +566,41 @@ function LearningPage() {
         <div className="learning-result-count">
           <strong>
             {
-              filteredGestures
+              filteredLessons
                 .length
             }
           </strong>
 
-          <span>
-            kata ditemukan
-          </span>
+          {" "}
+
+          kata ditemukan
         </div>
       </section>
 
 
-      {/* =================================
-          CATEGORIES
-      ================================= */}
+      {/* =====================================
+          CATEGORY
+      ===================================== */}
 
       <section className="learning-categories">
-        {categories.map(
+        {LEARNING_CATEGORIES.map(
           (category) => (
             <button
+              type="button"
               key={
                 category
               }
-              type="button"
               className={
                 activeCategory ===
-                category
+                  category
                   ? "active"
                   : ""
               }
-              onClick={() =>
+              onClick={() => {
                 setActiveCategory(
                   category
-                )
-              }
+                );
+              }}
             >
               {category}
             </button>
@@ -1033,9 +609,9 @@ function LearningPage() {
       </section>
 
 
-      {/* =================================
+      {/* =====================================
           LIBRARY
-      ================================= */}
+      ===================================== */}
 
       <section className="learning-library">
         <div className="learning-section-heading">
@@ -1044,6 +620,7 @@ function LearningPage() {
               Kamus Gesture
             </span>
 
+
             <h3>
               Kosakata BISINDO
             </h3>
@@ -1051,44 +628,100 @@ function LearningPage() {
 
 
           <BookOpen
-            size={20}
+            size={19}
             strokeWidth={1.7}
           />
         </div>
 
 
-        {filteredGestures.length >
+        {/* =================================
+            LESSON GRID
+        ================================= */}
+
+        {filteredLessons.length >
         0 ? (
           <div className="gesture-grid">
-            {filteredGestures.map(
-              (gesture) => {
-                const learned =
-                  isLearned(
-                    gesture.id
+            {filteredLessons.map(
+              (lesson) => {
+                const progress =
+                  getLessonProgress(
+                    lesson.id
+                  );
+
+
+                const completed =
+                  progress.completed;
+
+
+                const validRepetitions =
+                  Math.min(
+                    progress
+                      .validRepetitions,
+
+                    PRACTICE_RULES
+                      .requiredRepetitions
+                  );
+
+
+                const lessonPercent =
+                  Math.min(
+                    100,
+
+                    (
+                      validRepetitions
+                      /
+                      PRACTICE_RULES
+                        .requiredRepetitions
+                    )
+                    *
+                    100
                   );
 
 
                 return (
                   <article
+                    key={
+                      lesson.id
+                    }
                     className={
                       `gesture-card ${
-                        learned
+                        completed
                           ? "learned"
                           : ""
                       }`
                     }
-                    key={
-                      gesture.id
-                    }
                   >
-                    {/* PREVIEW */}
+                    {/* =========================
+                        VIDEO PREVIEW
+                    ========================= */}
 
-                    <div className="gesture-card-preview">
-                      <div className="gesture-preview-icon">
-                        <CirclePlay
-                          size={29}
-                          strokeWidth={1.45}
-                        />
+                    <button
+                      type="button"
+                      className="gesture-card-preview"
+                      onClick={() => {
+                        openLesson(
+                          lesson
+                        );
+                      }}
+                    >
+                      <video
+                        className="gesture-card-video"
+                        src={
+                          lesson.video
+                        }
+                        muted
+                        playsInline
+                        preload="metadata"
+                      />
+
+
+                      <div className="gesture-preview-overlay">
+                        <div className="gesture-preview-play">
+                          <CirclePlay
+                            size={23}
+                            strokeWidth={1.6}
+                          />
+                        </div>
                       </div>
 
 
@@ -1097,91 +730,123 @@ function LearningPage() {
                       </span>
 
 
-                      {learned && (
-                        <div className="gesture-learned-badge">
-                          <Check
-                            size={12}
-                            strokeWidth={2}
-                          />
-
-                          Dipelajari
-                        </div>
-                      )}
-
-
                       <span className="gesture-class-id">
                         #
                         {String(
-                          gesture.id
+                          lesson.id
                         ).padStart(
                           2,
                           "0"
                         )}
                       </span>
-                    </div>
 
 
-                    {/* CONTENT */}
+                      {completed && (
+                        <div className="gesture-learned-badge">
+                          <CheckCircle2
+                            size={11}
+                            strokeWidth={2}
+                          />
+
+                          {
+                            PRACTICE_RULES
+                              .requiredRepetitions
+                          }
+                          /
+                          {
+                            PRACTICE_RULES
+                              .requiredRepetitions
+                          }
+                        </div>
+                      )}
+                    </button>
+
+
+                    {/* =========================
+                        CARD CONTENT
+                    ========================= */}
 
                     <div className="gesture-card-content">
                       <span className="gesture-category">
                         {
-                          gesture.category
+                          lesson.category
                         }
                       </span>
 
 
                       <h4>
-                        {gesture.word}
+                        {
+                          lesson.word
+                        }
                       </h4>
 
 
                       <p>
-                        {gesture.meaning}
+                        {
+                          lesson.meaning
+                        }
                       </p>
 
+
+                      {/* =====================
+                          PRACTICE MINI PROGRESS
+                      ===================== */}
+
+                      <div className="gesture-practice-mini">
+                        <div>
+                          <span>
+                            Latihan AI
+                          </span>
+
+
+                          <strong>
+                            {
+                              validRepetitions
+                            }
+                            {" / "}
+                            {
+                              PRACTICE_RULES
+                                .requiredRepetitions
+                            }
+                          </strong>
+                        </div>
+
+
+                        <div className="gesture-practice-mini-track">
+                          <span
+                            style={{
+                              width:
+                                `${lessonPercent}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+
+                      {/* =====================
+                          ACTION
+                      ===================== */}
 
                       <div className="gesture-card-actions">
                         <button
                           type="button"
                           className="gesture-view-button"
-                          onClick={() =>
-                            setSelectedGesture(
-                              gesture
-                            )
-                          }
+                          onClick={() => {
+                            openLesson(
+                              lesson
+                            );
+                          }}
                         >
-                          Lihat Gerakan
+                          {completed
+                            ? (
+                                "Lihat Materi"
+                              )
+                            : (
+                                "Belajar & Latihan"
+                              )}
 
                           <ChevronRight
                             size={14}
-                          />
-                        </button>
-
-
-                        <button
-                          type="button"
-                          className={
-                            `gesture-check-button ${
-                              learned
-                                ? "active"
-                                : ""
-                            }`
-                          }
-                          title={
-                            learned
-                              ? "Tandai belum dipelajari"
-                              : "Tandai sudah dipelajari"
-                          }
-                          onClick={() =>
-                            toggleLearned(
-                              gesture.id
-                            )
-                          }
-                        >
-                          <CircleCheck
-                            size={16}
-                            strokeWidth={1.8}
                           />
                         </button>
                       </div>
@@ -1194,35 +859,35 @@ function LearningPage() {
         ) : (
           <div className="learning-empty">
             <Search
-              size={24}
+              size={25}
               strokeWidth={1.5}
             />
+
 
             <strong>
               Kosakata tidak ditemukan
             </strong>
 
+
             <p>
-              Coba gunakan kata atau
-              kategori lain.
+              Coba gunakan kata
+              atau kategori lain.
             </p>
           </div>
         )}
       </section>
 
 
-      {/* =================================
+      {/* =====================================
           LESSON MODAL
-      ================================= */}
+      ===================================== */}
 
-      {selectedGesture && (
+      {selectedLesson && (
         <div
           className="gesture-modal-backdrop"
           role="presentation"
-          onClick={() =>
-            setSelectedGesture(
-              null
-            )
+          onClick={
+            closeLesson
           }
         >
           <div
@@ -1230,27 +895,32 @@ function LearningPage() {
             role="dialog"
             aria-modal="true"
             aria-label={
-              `Belajar ${selectedGesture.word}`
+              `Belajar ${selectedLesson.word}`
             }
             onClick={
-              (event) =>
-                event.stopPropagation()
+              (event) => {
+                event
+                  .stopPropagation();
+              }
             }
           >
-            {/* HEADER */}
+            {/* =================================
+                MODAL HEADER
+            ================================= */}
 
             <div className="gesture-modal-header">
               <div>
                 <span>
                   {
-                    selectedGesture
+                    selectedLesson
                       .category
                   }
                 </span>
 
+
                 <h3>
                   {
-                    selectedGesture
+                    selectedLesson
                       .word
                   }
                 </h3>
@@ -1260,10 +930,8 @@ function LearningPage() {
               <button
                 type="button"
                 aria-label="Tutup"
-                onClick={() =>
-                  setSelectedGesture(
-                    null
-                  )
+                onClick={
+                  closeLesson
                 }
               >
                 <X
@@ -1274,315 +942,534 @@ function LearningPage() {
 
 
             {/* =================================
-                VIDEO + INFORMATION
+                LESSON MODE
             ================================= */}
 
-            <div className="lesson-content-grid">
-              {/* VIDEO */}
+            {!practiceMode && (
+              <>
+                <div className="lesson-content-grid">
+                  {/* =========================
+                      LEFT
+                  ========================= */}
 
-              <div className="lesson-video-section">
-                <div className="lesson-section-title">
-                  <Video
-                    size={15}
-                    strokeWidth={1.8}
-                  />
+                  <div className="lesson-video-section">
+                    {/* VIDEO TITLE */}
 
-                  <span>
-                    Video Gerakan
-                  </span>
+                    <div className="lesson-section-title">
+                      <Video
+                        size={15}
+                        strokeWidth={1.8}
+                      />
+
+                      Video Referensi
+                    </div>
+
+
+                    {/* VIDEO */}
+
+                    {!videoError ? (
+                      <div className="gesture-video-player">
+                        <video
+                          key={
+                            selectedLesson.id
+                          }
+                          src={
+                            selectedLesson.video
+                          }
+                          controls
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
+                          onError={() => {
+                            setVideoError(
+                              true
+                            );
+                          }}
+                        >
+                          Browser tidak
+                          mendukung video MP4.
+                        </video>
+                      </div>
+                    ) : (
+                      <div className="gesture-video-error">
+                        <Video
+                          size={28}
+                          strokeWidth={1.5}
+                        />
+
+                        <strong>
+                          Video tidak ditemukan
+                        </strong>
+
+                        <p>
+                          URL:
+                        </p>
+
+                        <code>
+                          {
+                            selectedLesson
+                              .video
+                          }
+                        </code>
+                      </div>
+                    )}
+
+
+                    {/* =================================
+                        MOVEMENT DESCRIPTION
+                    ================================= */}
+
+                    <section className="lesson-info-card lesson-movement-card">
+                      <div className="lesson-info-heading">
+                        <Lightbulb
+                          size={15}
+                          strokeWidth={1.8}
+                        />
+
+                        Gerakan dari Video Referensi
+                      </div>
+
+
+                      {/* HAND */}
+
+                      <div className="lesson-movement-block">
+                        <span>
+                          Tangan
+                        </span>
+
+
+                        <p>
+                          {
+                            selectedLesson
+                              .movement
+                              .hands
+                          }
+                        </p>
+                      </div>
+
+
+                      {/* START */}
+
+                      <div className="lesson-movement-block">
+                        <span>
+                          Posisi Awal
+                        </span>
+
+
+                        <p>
+                          {
+                            selectedLesson
+                              .movement
+                              .start
+                          }
+                        </p>
+                      </div>
+
+
+                      {/* ACTION */}
+
+                      <div className="lesson-movement-block">
+                        <span>
+                          Gerakan
+                        </span>
+
+
+                        <p>
+                          {
+                            selectedLesson
+                              .movement
+                              .action
+                          }
+                        </p>
+                      </div>
+
+
+                      {/* FINISH */}
+
+                      <div className="lesson-movement-block">
+                        <span>
+                          Posisi Akhir
+                        </span>
+
+
+                        <p>
+                          {
+                            selectedLesson
+                              .movement
+                              .finish
+                          }
+                        </p>
+                      </div>
+
+
+                      {/* FOCUS */}
+
+                      <div className="lesson-focus-list">
+                        <span>
+                          Hal yang Perlu Diperhatikan
+                        </span>
+
+
+                        <ul>
+                          {selectedLesson
+                            .movement
+                            .focus
+                            .map(
+                              (item) => (
+                                <li
+                                  key={
+                                    item
+                                  }
+                                >
+                                  {item}
+                                </li>
+                              )
+                            )}
+                        </ul>
+                      </div>
+                    </section>
+                  </div>
+
+
+                  {/* =========================
+                      RIGHT
+                  ========================= */}
+
+                  <div className="lesson-information">
+                    {/* ARTI */}
+
+                    <section className="lesson-info-card">
+                      <div className="lesson-info-heading">
+                        <Languages
+                          size={15}
+                          strokeWidth={1.8}
+                        />
+
+                        Arti
+                      </div>
+
+
+                      <p>
+                        {
+                          selectedLesson
+                            .meaning
+                        }
+                      </p>
+                    </section>
+
+
+                    {/* EXAMPLE */}
+
+                    <section className="lesson-info-card">
+                      <div className="lesson-info-heading">
+                        <MessageSquareText
+                          size={15}
+                          strokeWidth={1.8}
+                        />
+
+                        Contoh Kalimat
+                      </div>
+
+
+                      <p className="lesson-example">
+                        “
+                        {
+                          selectedLesson
+                            .example
+                        }
+                        ”
+                      </p>
+                    </section>
+
+
+                    {/* PRACTICE RULE */}
+
+                    <section className="lesson-info-card">
+                      <div className="lesson-info-heading">
+                        <CheckCircle2
+                          size={15}
+                          strokeWidth={1.8}
+                        />
+
+                        Syarat Selesai
+                      </div>
+
+
+                      <p>
+                        Kosakata ini hanya
+                        dianggap selesai jika
+                        gesture berhasil
+                        dikenali AI sebanyak
+                        {" "}
+                        <strong>
+                          {
+                            PRACTICE_RULES
+                              .requiredRepetitions
+                          }
+                          {" "}
+                          kali
+                        </strong>
+                        .
+                      </p>
+
+
+                      <p>
+                        Prediksi harus sama
+                        dengan target
+                        {" "}
+                        <strong>
+                          {
+                            selectedLesson
+                              .word
+                          }
+                        </strong>
+                        ,
+                        confidence minimal
+                        {" "}
+                        <strong>
+                          {
+                            PRACTICE_RULES
+                              .minConfidencePercent
+                          }
+                          %
+                        </strong>
+                        {" "}
+                        dan margin minimal
+                        {" "}
+                        <strong>
+                          {
+                            PRACTICE_RULES
+                              .minMarginPercent
+                          }
+                          %
+                        </strong>
+                        .
+                      </p>
+                    </section>
+
+
+                    {/* HOW TO PRACTICE */}
+
+                    <section className="lesson-info-card">
+                      <div className="lesson-info-heading">
+                        <Lightbulb
+                          size={15}
+                          strokeWidth={1.8}
+                        />
+
+                        Cara Latihan
+                      </div>
+
+
+                      <p>
+                        Tonton video beberapa
+                        kali sebelum menyalakan
+                        kamera.
+                      </p>
+
+
+                      <p>
+                        Setelah satu gesture
+                        berhasil dikenali,
+                        kembali ke posisi netral
+                        terlebih dahulu sebelum
+                        mengulanginya.
+                      </p>
+
+
+                      <p>
+                        Menahan satu gesture
+                        terus-menerus tidak
+                        dihitung sebagai beberapa
+                        repetisi.
+                      </p>
+                    </section>
+
+
+                    {/* NOTE */}
+
+                    <div className="gesture-modal-note">
+                      <Lightbulb
+                        size={15}
+                        strokeWidth={1.8}
+                      />
+
+
+                      <p>
+                        Deskripsi gerakan
+                        merupakan observasi dari
+                        video referensi dataset
+                        BISINDO v1 dan belum
+                        diklaim sebagai standar
+                        BISINDO yang telah
+                        diverifikasi ahli.
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
 
-                {!videoFailed ? (
-                  <div className="gesture-video-player">
-                    <video
-                      key={
-                        selectedGesture.id
-                      }
-                      controls
-                      loop
-                      playsInline
-                      preload="metadata"
-                      onError={() =>
-                        setVideoFailed(
-                          true
-                        )
-                      }
-                    >
-                      <source
-                        src={
-                          selectedVideoSources[0]
-                        }
-                        type="video/mp4"
-                      />
+                {/* =================================
+                    CURRENT LESSON PROGRESS
+                ================================= */}
 
-                      <source
-                        src={
-                          selectedVideoSources[1]
-                        }
-                        type="video/mp4"
-                      />
+                <div className="gesture-modal-info">
+                  <div>
+                    <span>
+                      Class ID
+                    </span>
 
-                      Browser tidak mendukung
-                      video MP4.
-                    </video>
-                  </div>
-                ) : (
-                  <div className="gesture-video-error">
-                    <Video
-                      size={27}
-                      strokeWidth={1.5}
-                    />
 
                     <strong>
-                      Video tidak ditemukan
+                      #
+                      {String(
+                        selectedLesson.id
+                      ).padStart(
+                        2,
+                        "0"
+                      )}
                     </strong>
-
-                    <p>
-                      Pastikan file video berada
-                      di folder
-                      {" "}
-                      <code>
-                        public/learning-videos
-                      </code>
-                      .
-                    </p>
                   </div>
-                )}
 
 
-                <div className="lesson-video-hint">
-                  <Eye
-                    size={14}
-                    strokeWidth={1.8}
+                  <div>
+                    <span>
+                      Kategori
+                    </span>
+
+
+                    <strong>
+                      {
+                        selectedLesson
+                          .category
+                      }
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      Latihan Valid
+                    </span>
+
+
+                    <strong>
+                      {
+                        getLessonProgress(
+                          selectedLesson.id
+                        )
+                          .validRepetitions
+                      }
+                      {" / "}
+                      {
+                        PRACTICE_RULES
+                          .requiredRepetitions
+                      }
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      Status
+                    </span>
+
+
+                    <strong>
+                      {getLessonProgress(
+                        selectedLesson.id
+                      ).completed
+                        ? (
+                            "Selesai"
+                          )
+                        : (
+                            "Belum Selesai"
+                          )}
+                    </strong>
+                  </div>
+                </div>
+
+
+                {/* =================================
+                    START PRACTICE
+                ================================= */}
+
+                <button
+                  type="button"
+                  className="gesture-modal-complete"
+                  onClick={() => {
+                    setPracticeMode(
+                      true
+                    );
+                  }}
+                >
+                  <Play
+                    size={16}
+                    strokeWidth={1.9}
                   />
 
-                  <p>
-                    Tonton video beberapa kali.
-                    Fokus pada bentuk tangan,
-                    posisi awal, arah gerakan,
-                    dan posisi akhir.
-                  </p>
-                </div>
-              </div>
+                  Latih dengan Kamera
 
+                  {" · "}
 
-              {/* INFORMATION */}
-
-              <div className="lesson-information">
-                {/* MEANING */}
-
-                <section className="lesson-info-card">
-                  <div className="lesson-info-heading">
-                    <Languages
-                      size={15}
-                      strokeWidth={1.8}
-                    />
-
-                    <span>
-                      Arti
-                    </span>
-                  </div>
-
-                  <p>
-                    {
-                      selectedGesture
-                        .meaning
-                    }
-                  </p>
-                </section>
-
-
-                {/* EXAMPLE */}
-
-                <section className="lesson-info-card">
-                  <div className="lesson-info-heading">
-                    <MessageSquareText
-                      size={15}
-                      strokeWidth={1.8}
-                    />
-
-                    <span>
-                      Contoh Kalimat
-                    </span>
-                  </div>
-
-                  <p className="lesson-example">
-                    “
-                    {
-                      selectedGesture
-                        .example
-                    }
-                    ”
-                  </p>
-                </section>
-
-
-                {/* HOW TO LEARN */}
-
-                <section className="lesson-info-card lesson-guide-card">
-                  <div className="lesson-info-heading">
-                    <Lightbulb
-                      size={15}
-                      strokeWidth={1.8}
-                    />
-
-                    <span>
-                      Cara Mempelajari
-                    </span>
-                  </div>
-
-
-                  <ol>
-                    {learningTips.map(
-                      (
-                        tip,
-                        index
-                      ) => (
-                        <li
-                          key={
-                            tip
-                          }
-                        >
-                          <span>
-                            {
-                              index + 1
-                            }
-                          </span>
-
-                          <p>
-                            {tip}
-                          </p>
-                        </li>
-                      )
-                    )}
-                  </ol>
-                </section>
-              </div>
-            </div>
-
-
-            {/* =================================
-                LESSON NOTE
-            ================================= */}
-
-            <div className="gesture-modal-note">
-              <Lightbulb
-                size={16}
-                strokeWidth={1.8}
-              />
-
-              <p>
-                Video yang ditampilkan
-                merupakan video referensi
-                untuk kelas
-                {" "}
-                <strong>
                   {
-                    selectedGesture
-                      .word
+                    getLessonProgress(
+                      selectedLesson.id
+                    )
+                      .validRepetitions
                   }
-                </strong>
-                .
-                Penjelasan cara gerakan
-                spesifik mengikuti gerakan
-                pada video agar tidak
-                mengarang bentuk BISINDO.
-              </p>
-            </div>
-
-
-            {/* =================================
-                METADATA
-            ================================= */}
-
-            <div className="gesture-modal-info">
-              <div>
-                <span>
-                  Class ID
-                </span>
-
-                <strong>
-                  #
-                  {String(
-                    selectedGesture.id
-                  ).padStart(
-                    2,
-                    "0"
-                  )}
-                </strong>
-              </div>
-
-
-              <div>
-                <span>
-                  Kategori
-                </span>
-
-                <strong>
+                  /
                   {
-                    selectedGesture
-                      .category
+                    PRACTICE_RULES
+                      .requiredRepetitions
                   }
-                </strong>
-              </div>
-
-
-              <div>
-                <span>
-                  Model
-                </span>
-
-                <strong>
-                  BISINDO v1
-                </strong>
-              </div>
-
-
-              <div>
-                <span>
-                  Media
-                </span>
-
-                <strong>
-                  Video Referensi
-                </strong>
-              </div>
-            </div>
+                </button>
+              </>
+            )}
 
 
             {/* =================================
-                COMPLETE
+                PRACTICE MODE
             ================================= */}
 
-            <button
-              type="button"
-              className={
-                `gesture-modal-complete ${
-                  isLearned(
-                    selectedGesture.id
-                  )
-                    ? "completed"
-                    : ""
-                }`
-              }
-              onClick={() =>
-                toggleLearned(
-                  selectedGesture.id
-                )
-              }
-            >
-              <CircleCheck
-                size={17}
-                strokeWidth={1.9}
-              />
+            {practiceMode && (
+              <>
+                <LearningPracticePanel
+                  lesson={
+                    selectedLesson
+                  }
 
-              {isLearned(
-                selectedGesture.id
-              )
-                ? "Sudah Dipelajari"
-                : "Tandai Sudah Dipelajari"}
-            </button>
+                  progress={
+                    getLessonProgress(
+                      selectedLesson.id
+                    )
+                  }
+
+                  onRegisterResult={
+                    registerResult
+                  }
+
+                  onReset={
+                    resetLesson
+                  }
+                />
+
+
+                <button
+                  type="button"
+                  className="gesture-modal-complete completed"
+                  onClick={() => {
+                    setPracticeMode(
+                      false
+                    );
+                  }}
+                >
+                  Kembali ke Materi
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

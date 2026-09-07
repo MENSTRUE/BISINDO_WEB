@@ -1,0 +1,832 @@
+/* =========================================
+   LEARNING PRACTICE
+========================================= */
+
+.learning-practice-panel {
+  margin-top: 14px;
+  padding: 14px;
+
+  border:
+    1px solid
+    rgba(
+      59,
+      130,
+      246,
+      0.18
+    );
+
+  border-radius: 12px;
+
+  background:
+    var(
+      --surface-soft
+    );
+}
+
+
+/* =========================================
+   HEADER
+========================================= */
+
+.learning-practice-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+
+.learning-practice-header > div:first-child > span {
+  color:
+    var(
+      --accent-soft
+    );
+
+  font-size: 8px;
+  font-weight: 700;
+
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+
+.learning-practice-header h4 {
+  margin: 4px 0;
+
+  color:
+    var(
+      --text-primary
+    );
+
+  font-size: 17px;
+}
+
+
+.learning-practice-header p {
+  margin: 0;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 9px;
+}
+
+
+.learning-practice-header p strong {
+  color:
+    var(
+      --accent-soft
+    );
+}
+
+
+.learning-practice-completed {
+  padding: 6px 9px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  flex-shrink: 0;
+
+  border:
+    1px solid
+    rgba(
+      34,
+      197,
+      94,
+      0.2
+    );
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      34,
+      197,
+      94,
+      0.07
+    );
+
+  color: #4ade80;
+
+  font-size: 8px;
+  font-weight: 700;
+}
+
+
+/* =========================================
+   PROGRESS
+========================================= */
+
+.learning-practice-progress {
+  margin-top: 13px;
+}
+
+
+.learning-practice-progress-top {
+  margin-bottom: 7px;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+
+.learning-practice-progress-top span {
+  display: block;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 8px;
+}
+
+
+.learning-practice-progress-top strong {
+  color:
+    var(
+      --text-primary
+    );
+
+  font-size: 14px;
+}
+
+
+.learning-practice-progress-top b {
+  color:
+    var(
+      --accent-soft
+    );
+
+  font-size: 12px;
+}
+
+
+.learning-practice-track {
+  width: 100%;
+  height: 7px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.13
+    );
+}
+
+
+.learning-practice-track > div {
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #2563eb,
+      #38bdf8
+    );
+
+  transition:
+    width
+    220ms ease;
+}
+
+
+/* =========================================
+   CAMERA
+========================================= */
+
+.learning-practice-preview {
+  position: relative;
+
+  width: 100%;
+
+  margin-top: 13px;
+
+  overflow: hidden;
+
+  aspect-ratio: 16 / 9;
+
+  border:
+    1px solid
+    var(
+      --border
+    );
+
+  border-radius: 11px;
+
+  background: #030712;
+}
+
+
+.learning-practice-video {
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  display: block;
+
+  object-fit: cover;
+  object-position: center center;
+
+  transform:
+    scaleX(-1);
+
+  background: #030712;
+}
+
+
+.learning-practice-preview
+.landmark-canvas {
+  position: absolute;
+
+  z-index: 2;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  pointer-events: none;
+}
+
+
+.learning-practice-camera-empty {
+  position: absolute;
+
+  z-index: 3;
+
+  inset: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(
+        37,
+        99,
+        235,
+        0.12
+      ),
+      transparent 48%
+    ),
+    #030712;
+
+  color:
+    #6682a6;
+
+  text-align: center;
+}
+
+
+.learning-practice-camera-empty strong {
+  margin-top: 9px;
+
+  color:
+    #b7c5d8;
+
+  font-size: 11px;
+}
+
+
+.learning-practice-camera-empty p {
+  max-width: 290px;
+
+  margin: 5px 0 0;
+
+  color:
+    #64748b;
+
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+
+.learning-practice-live {
+  position: absolute;
+
+  z-index: 5;
+
+  top: 9px;
+  right: 9px;
+
+  padding: 5px 8px;
+
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      3,
+      7,
+      18,
+      0.78
+    );
+
+  color: #ffffff;
+
+  font-size: 7px;
+  font-weight: 700;
+}
+
+
+.learning-practice-live span {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+
+  background: #22c55e;
+
+  box-shadow:
+    0 0 7px
+    rgba(
+      34,
+      197,
+      94,
+      0.55
+    );
+}
+
+
+/* =========================================
+   CAMERA ACTIONS
+========================================= */
+
+.learning-practice-camera-actions {
+  margin-top: 9px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+.learning-practice-start,
+.learning-practice-stop {
+  min-height: 35px;
+
+  padding: 0 11px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  border-radius: 8px;
+
+  font-size: 8px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+
+.learning-practice-start {
+  border:
+    1px solid
+    rgba(
+      59,
+      130,
+      246,
+      0.3
+    );
+
+  background:
+    var(
+      --accent-strong
+    );
+
+  color: #ffffff;
+}
+
+
+.learning-practice-stop {
+  border:
+    1px solid
+    rgba(
+      239,
+      68,
+      68,
+      0.18
+    );
+
+  background:
+    rgba(
+      239,
+      68,
+      68,
+      0.07
+    );
+
+  color: #e88888;
+}
+
+
+.learning-practice-stream {
+  margin-left: auto;
+
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 7px;
+}
+
+
+/* =========================================
+   AI INFO
+========================================= */
+
+.learning-practice-ai-grid {
+  margin-top: 10px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 6px;
+}
+
+
+.learning-practice-ai-grid > div {
+  min-width: 0;
+
+  padding: 9px;
+
+  border:
+    1px solid
+    var(
+      --border
+    );
+
+  border-radius: 8px;
+
+  background:
+    var(
+      --surface
+    );
+}
+
+
+.learning-practice-ai-grid span {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 7px;
+}
+
+
+.learning-practice-ai-grid strong {
+  display: block;
+
+  overflow: hidden;
+
+  color:
+    var(
+      --text-secondary
+    );
+
+  font-size: 9px;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+
+/* =========================================
+   FEEDBACK
+========================================= */
+
+.learning-practice-feedback {
+  margin-top: 9px;
+
+  padding: 10px;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+
+  border:
+    1px solid
+    var(
+      --border
+    );
+
+  border-radius: 9px;
+
+  background:
+    var(
+      --surface
+    );
+
+  color:
+    var(
+      --text-muted
+    );
+}
+
+
+.learning-practice-feedback > svg {
+  flex-shrink: 0;
+}
+
+
+.learning-practice-feedback strong {
+  display: block;
+
+  color:
+    var(
+      --text-secondary
+    );
+
+  font-size: 9px;
+}
+
+
+.learning-practice-feedback p {
+  margin: 3px 0 0;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+
+.learning-practice-feedback.success {
+  border-color:
+    rgba(
+      34,
+      197,
+      94,
+      0.18
+    );
+
+  color: #4ade80;
+
+  background:
+    rgba(
+      34,
+      197,
+      94,
+      0.035
+    );
+}
+
+
+.learning-practice-feedback.error {
+  border-color:
+    rgba(
+      239,
+      68,
+      68,
+      0.15
+    );
+
+  color: #ef8080;
+
+  background:
+    rgba(
+      239,
+      68,
+      68,
+      0.03
+    );
+}
+
+
+.learning-practice-feedback.waiting {
+  color:
+    var(
+      --accent-soft
+    );
+
+  border-color:
+    rgba(
+      59,
+      130,
+      246,
+      0.16
+    );
+}
+
+
+/* =========================================
+   STATS
+========================================= */
+
+.learning-practice-stats {
+  margin-top: 8px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      5,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 5px;
+}
+
+
+.learning-practice-stats > div {
+  padding: 8px;
+
+  border:
+    1px solid
+    var(
+      --border
+    );
+
+  border-radius: 8px;
+
+  background:
+    var(
+      --surface
+    );
+}
+
+
+.learning-practice-stats span {
+  display: block;
+
+  margin-bottom: 3px;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 6.5px;
+}
+
+
+.learning-practice-stats strong {
+  color:
+    var(
+      --text-secondary
+    );
+
+  font-size: 9px;
+}
+
+
+/* =========================================
+   RESET
+========================================= */
+
+.learning-practice-reset {
+  margin-top: 9px;
+
+  min-height: 30px;
+
+  padding: 0 9px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  border:
+    1px solid
+    var(
+      --border
+    );
+
+  border-radius: 7px;
+
+  background:
+    transparent;
+
+  color:
+    var(
+      --text-muted
+    );
+
+  font-size: 7px;
+
+  cursor: pointer;
+}
+
+
+/* =========================================
+   ERROR
+========================================= */
+
+.learning-practice-error-message {
+  margin-top: 7px;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  color: #ef8080;
+
+  font-size: 8px;
+}
+
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (
+  max-width: 700px
+) {
+  .learning-practice-ai-grid {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+
+  .learning-practice-stats {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+}
+
+
+@media (
+  max-width: 480px
+) {
+  .learning-practice-preview {
+    aspect-ratio: 4 / 3;
+  }
+
+
+  .learning-practice-camera-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+
+  .learning-practice-start,
+  .learning-practice-stop {
+    justify-content: center;
+  }
+
+
+  .learning-practice-stream {
+    margin-left: 0;
+
+    justify-content: center;
+  }
+}
