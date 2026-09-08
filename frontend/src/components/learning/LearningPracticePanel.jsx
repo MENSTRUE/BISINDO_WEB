@@ -36,79 +36,61 @@ import "../../styles/learning-practice.css";
 
 function LearningPracticePanel({
   lesson,
-
   progress,
-
   onRegisterResult,
-
   onReset,
 }) {
-  /* =========================
+  /* =========================================
      CAMERA
-  ========================= */
+  ========================================= */
 
   const {
     videoRef,
-
     isCameraActive,
-
     cameraStatus,
-
     cameraError,
-
     startCamera,
-
     stopCamera,
   } = useCamera();
 
 
-  /* =========================
+  /* =========================================
      STREAM
-  ========================= */
+  ========================================= */
 
   const {
     isStreaming,
-
     streamFps,
-
-    sentFrames,
-
     receivedFrames,
   } = useFrameStreamer({
     videoRef,
-
     isCameraActive,
   });
 
 
-  /* =========================
+  /* =========================================
      REALTIME AI
-  ========================= */
+  ========================================= */
 
   const {
     landmarks,
 
     lastFrameId,
 
-    predictionStatus,
-
     predictionAccepted,
-
     predictionAcceptedEvent,
 
     predictionLabel,
-
     predictionConfidencePercent,
-
     predictionMarginPercent,
 
     predictionSegmentId,
   } = useRealtimeLandmarks();
 
 
-  /* =========================
+  /* =========================================
      FEEDBACK
-  ========================= */
+  ========================================= */
 
   const [
     feedback,
@@ -125,45 +107,49 @@ function LearningPracticePanel({
 
 
   /*
-   * Mencegah accepted_event
-   * yang sama dihitung dua kali.
+   * Satu accepted event dari backend
+   * hanya boleh dihitung sekali.
    */
   const lastAcceptedEventRef =
     useRef(null);
 
 
-  /* =========================
+  /* =========================================
      EVENT KEY
-  ========================= */
+  ========================================= */
 
   const currentEventKey =
     useMemo(
       () => {
+        /*
+         * Prioritas pertama:
+         * gunakan segment ID dari backend.
+         *
+         * Ini paling aman karena setiap
+         * gesture mempunyai segment berbeda.
+         */
         if (
-          predictionSegmentId !==
-            null
+          predictionSegmentId !== null
           &&
-          predictionSegmentId !==
-            undefined
+          predictionSegmentId !== undefined
         ) {
           return (
-            `segment:`
-            +
-            `${predictionSegmentId}`
+            `segment:${predictionSegmentId}`
           );
         }
 
 
+        /*
+         * Fallback jika backend tidak
+         * mengirim segment ID.
+         */
         if (
           lastFrameId !== null
           &&
-          lastFrameId !==
-            undefined
+          lastFrameId !== undefined
         ) {
           return (
-            `frame:`
-            +
-            `${lastFrameId}:`
+            `frame:${lastFrameId}:`
             +
             `${predictionLabel ?? ""}`
           );
@@ -181,18 +167,17 @@ function LearningPracticePanel({
     );
 
 
-  /* =========================
-     START
-  ========================= */
+  /* =========================================
+     START CAMERA
+  ========================================= */
 
   const handleStart =
     async () => {
       /*
-       * Jangan hitung event lama
-       * sebelum kamera dimulai.
+       * Jangan sampai hasil gesture lama
+       * sebelum kamera aktif ikut dihitung.
        */
-      lastAcceptedEventRef
-        .current =
+      lastAcceptedEventRef.current =
         currentEventKey;
 
 
@@ -211,9 +196,9 @@ function LearningPracticePanel({
     };
 
 
-  /* =========================
-     STOP
-  ========================= */
+  /* =========================================
+     STOP CAMERA
+  ========================================= */
 
   const handleStop =
     () => {
@@ -232,119 +217,144 @@ function LearningPracticePanel({
     };
 
 
-  /* =========================
+  /* =========================================
      AI ACCEPTED EVENT
-  ========================= */
+  ========================================= */
 
-  useEffect(() => {
-    if (
-      !isCameraActive
-      ||
-      !isStreaming
-    ) {
-      return;
-    }
-
-
-    if (
-      !predictionAcceptedEvent
-      ||
-      !predictionAccepted
-      ||
-      !predictionLabel
-    ) {
-      return;
-    }
+  useEffect(
+    () => {
+      /*
+       * Kamera dan stream harus aktif.
+       */
+      if (
+        !isCameraActive
+        ||
+        !isStreaming
+      ) {
+        return;
+      }
 
 
-    if (!currentEventKey) {
-      return;
-    }
+      /*
+       * Hanya accepted_event dari backend
+       * yang boleh menjadi satu attempt.
+       */
+      if (
+        !predictionAcceptedEvent
+        ||
+        !predictionAccepted
+        ||
+        !predictionLabel
+      ) {
+        return;
+      }
 
 
-    if (
-      lastAcceptedEventRef
-        .current
-      ===
-      currentEventKey
-    ) {
-      return;
-    }
+      if (!currentEventKey) {
+        return;
+      }
 
 
-    lastAcceptedEventRef
-      .current =
-      currentEventKey;
+      /*
+       * Jangan hitung segment yang sama
+       * berkali-kali walaupun React
+       * menerima beberapa message.
+       */
+      if (
+        lastAcceptedEventRef.current
+        ===
+        currentEventKey
+      ) {
+        return;
+      }
 
 
-    const confidence =
-      Number(
-        predictionConfidencePercent
-        ??
-        0
-      );
+      lastAcceptedEventRef.current =
+        currentEventKey;
 
 
-    const margin =
-      Number(
-        predictionMarginPercent
-        ??
-        0
-      );
-
-
-    const result =
-      onRegisterResult({
-        lesson,
-
-        predictedLabel:
-          predictionLabel,
-
-        confidencePercent:
-          confidence,
-
-        marginPercent:
-          margin,
-      });
-
-
-    if (
-      result?.valid
-    ) {
-      setFeedback({
-        type: "success",
-
-        title:
-          `Valid — ${lesson.word}`,
-
-        description:
-          (
-            `${confidence.toFixed(1)}% confidence`
-            +
-            ` · margin ${margin.toFixed(1)}%. `
-            +
-            "Kembali ke posisi netral lalu ulangi."
-          ),
-      });
-    }
-
-    else {
-      let reason =
-        (
-          `AI membaca "${predictionLabel}".`
+      const confidence =
+        Number(
+          predictionConfidencePercent
+          ??
+          0
         );
 
 
+      const margin =
+        Number(
+          predictionMarginPercent
+          ??
+          0
+        );
+
+
+      /*
+       * Simpan hasil ke progress lesson.
+       */
+      const result =
+        onRegisterResult({
+          lesson,
+
+          predictedLabel:
+            predictionLabel,
+
+          confidencePercent:
+            confidence,
+
+          marginPercent:
+            margin,
+        });
+
+
+      /* =====================================
+         VALID
+      ===================================== */
+
       if (
-        result
-          ?.labelMatches
+        result?.valid
+      ) {
+        setFeedback({
+          type: "success",
+
+          title:
+            `Valid — ${lesson.word}`,
+
+          description:
+            (
+              `${confidence.toFixed(1)}% confidence`
+              +
+              ` · margin ${margin.toFixed(1)}%. `
+              +
+              "Kembali ke posisi netral lalu ulangi gesture."
+            ),
+        });
+
+
+        return;
+      }
+
+
+      /* =====================================
+         INVALID
+      ===================================== */
+
+      let reason =
+        `AI membaca "${predictionLabel}".`;
+
+
+      /*
+       * Label benar tetapi confidence
+       * belum mencapai threshold.
+       */
+      if (
+        result?.labelMatches
         &&
-        !result
-          ?.confidenceValid
+        !result?.confidenceValid
       ) {
         reason =
           (
-            `Label benar, tetapi confidence `
+            "Label sudah benar, tetapi confidence "
             +
             `${confidence.toFixed(1)}% masih di bawah `
             +
@@ -353,16 +363,18 @@ function LearningPracticePanel({
       }
 
 
+      /*
+       * Label + confidence benar,
+       * tetapi margin belum cukup.
+       */
       else if (
-        result
-          ?.labelMatches
+        result?.labelMatches
         &&
-        !result
-          ?.marginValid
+        !result?.marginValid
       ) {
         reason =
           (
-            `Label benar, tetapi margin `
+            "Label sudah benar, tetapi margin "
             +
             `${margin.toFixed(1)}% belum mencapai `
             +
@@ -379,36 +391,41 @@ function LearningPracticePanel({
 
         description:
           (
-            `${reason} Target latihan adalah "${lesson.word}".`
+            `${reason} `
+            +
+            `Target latihan adalah "${lesson.word}".`
           ),
       });
-    }
+    },
 
-  }, [
-    isCameraActive,
-    isStreaming,
+    [
+      isCameraActive,
+      isStreaming,
 
-    predictionAcceptedEvent,
-    predictionAccepted,
-    predictionLabel,
+      predictionAcceptedEvent,
+      predictionAccepted,
+      predictionLabel,
 
-    predictionConfidencePercent,
-    predictionMarginPercent,
+      predictionConfidencePercent,
+      predictionMarginPercent,
 
-    currentEventKey,
+      currentEventKey,
 
-    lesson,
-    onRegisterResult,
-  ]);
+      lesson,
+      onRegisterResult,
+    ]
+  );
 
 
-  /* =========================
-     CLEANUP
-  ========================= */
+  /* =========================================
+     CLEANUP CAMERA
+  ========================================= */
 
   useEffect(
-    () => () => {
-      stopCamera();
+    () => {
+      return () => {
+        stopCamera();
+      };
     },
 
     [
@@ -417,14 +434,18 @@ function LearningPracticePanel({
   );
 
 
-  /* =========================
+  /* =========================================
      PROGRESS
-  ========================= */
+  ========================================= */
 
   const validCount =
     Math.min(
-      progress
-        .validRepetitions,
+      Number(
+        progress
+          ?.validRepetitions
+        ??
+        0
+      ),
 
       PRACTICE_RULES
         .requiredRepetitions
@@ -444,17 +465,25 @@ function LearningPracticePanel({
     );
 
 
+  /* =========================================
+     CURRENT PREDICTION
+  ========================================= */
+
   const currentPrediction =
     predictionLabel
     ||
     "Menunggu...";
 
 
+  /* =========================================
+     RENDER
+  ========================================= */
+
   return (
     <section className="learning-practice-panel">
-      {/* =====================
+      {/* =====================================
           HEADER
-      ===================== */}
+      ===================================== */}
 
       <div className="learning-practice-header">
         <div>
@@ -462,14 +491,17 @@ function LearningPracticePanel({
             AI Practice
           </span>
 
+
           <h4>
             Latih “{lesson.word}”
           </h4>
+
 
           <p>
             Gesture harus berhasil
             dikenali AI sebanyak
             {" "}
+
             <strong>
               {
                 PRACTICE_RULES
@@ -482,10 +514,11 @@ function LearningPracticePanel({
         </div>
 
 
-        {progress.completed && (
+        {progress?.completed && (
           <div className="learning-practice-completed">
             <CheckCircle2
               size={15}
+              strokeWidth={1.9}
             />
 
             Selesai
@@ -494,9 +527,9 @@ function LearningPracticePanel({
       </div>
 
 
-      {/* =====================
+      {/* =====================================
           PROGRESS
-      ===================== */}
+      ===================================== */}
 
       <div className="learning-practice-progress">
         <div className="learning-practice-progress-top">
@@ -504,6 +537,7 @@ function LearningPracticePanel({
             <span>
               Latihan valid
             </span>
+
 
             <strong>
               {validCount}
@@ -533,19 +567,45 @@ function LearningPracticePanel({
       </div>
 
 
-      {/* =====================
-          CAMERA
-      ===================== */}
+      {/* =====================================
+          CAMERA PREVIEW
+      ===================================== */}
 
       <div className="learning-practice-preview">
+        {/*
+         * FIX PENTING:
+         *
+         * CSS global .camera-video
+         * mempunyai opacity: 0.
+         *
+         * Class "visible" harus diberikan
+         * ketika kamera sudah aktif.
+         *
+         * Sebelumnya:
+         *
+         * className=
+         * "camera-video learning-practice-video"
+         *
+         * menyebabkan video sebenarnya hidup,
+         * tetapi tidak terlihat.
+         */}
+
         <video
           ref={videoRef}
-          className="camera-video learning-practice-video"
+          className={
+            `camera-video learning-practice-video ${
+              isCameraActive
+                ? "visible"
+                : ""
+            }`
+          }
           autoPlay
           muted
           playsInline
         />
 
+
+        {/* LANDMARK */}
 
         <LandmarkCanvas
           landmarks={
@@ -555,6 +615,8 @@ function LearningPracticePanel({
         />
 
 
+        {/* CAMERA OFF */}
+
         {!isCameraActive && (
           <div className="learning-practice-camera-empty">
             <Camera
@@ -562,9 +624,11 @@ function LearningPracticePanel({
               strokeWidth={1.5}
             />
 
+
             <strong>
               Kamera belum aktif
             </strong>
+
 
             <p>
               Posisikan tubuh seperti
@@ -574,6 +638,8 @@ function LearningPracticePanel({
           </div>
         )}
 
+
+        {/* LIVE BADGE */}
 
         {isCameraActive && (
           <div className="learning-practice-live">
@@ -585,9 +651,9 @@ function LearningPracticePanel({
       </div>
 
 
-      {/* =====================
-          CAMERA ACTION
-      ===================== */}
+      {/* =====================================
+          CAMERA ACTIONS
+      ===================================== */}
 
       <div className="learning-practice-camera-actions">
         {!isCameraActive ? (
@@ -606,10 +672,15 @@ function LearningPracticePanel({
               size={15}
             />
 
+
             {cameraStatus ===
             "requesting"
-              ? "Meminta Izin..."
-              : "Mulai Kamera"}
+              ? (
+                  "Meminta Izin..."
+                )
+              : (
+                  "Mulai Kamera"
+                )}
           </button>
         ) : (
           <button
@@ -628,10 +699,13 @@ function LearningPracticePanel({
         )}
 
 
+        {/* STREAM INFO */}
+
         <div className="learning-practice-stream">
           <Wifi
             size={13}
           />
+
 
           {isStreaming
             ? (
@@ -639,10 +713,16 @@ function LearningPracticePanel({
                 +
                 `${receivedFrames} frame`
               )
-            : "Menunggu stream"}
+            : (
+                "Menunggu stream"
+              )}
         </div>
       </div>
 
+
+      {/* =====================================
+          CAMERA ERROR
+      ===================================== */}
 
       {cameraError && (
         <div className="learning-practice-error-message">
@@ -655,15 +735,18 @@ function LearningPracticePanel({
       )}
 
 
-      {/* =====================
-          LIVE AI
-      ===================== */}
+      {/* =====================================
+          LIVE AI RESULT
+      ===================================== */}
 
       <div className="learning-practice-ai-grid">
+        {/* TARGET */}
+
         <div>
           <span>
             Target
           </span>
+
 
           <strong>
             {lesson.word}
@@ -671,10 +754,13 @@ function LearningPracticePanel({
         </div>
 
 
+        {/* PREDICTION */}
+
         <div>
           <span>
             Prediksi AI
           </span>
+
 
           <strong>
             {
@@ -684,10 +770,13 @@ function LearningPracticePanel({
         </div>
 
 
+        {/* CONFIDENCE */}
+
         <div>
           <span>
             Confidence
           </span>
+
 
           <strong>
             {predictionLabel
@@ -698,15 +787,20 @@ function LearningPracticePanel({
                     0
                   ).toFixed(1)}%`
                 )
-              : "--"}
+              : (
+                  "--"
+                )}
           </strong>
         </div>
 
+
+        {/* MARGIN */}
 
         <div>
           <span>
             Margin
           </span>
+
 
           <strong>
             {predictionLabel
@@ -717,15 +811,17 @@ function LearningPracticePanel({
                     0
                   ).toFixed(1)}%`
                 )
-              : "--"}
+              : (
+                  "--"
+                )}
           </strong>
         </div>
       </div>
 
 
-      {/* =====================
+      {/* =====================================
           FEEDBACK
-      ===================== */}
+      ===================================== */}
 
       <div
         className={
@@ -737,6 +833,11 @@ function LearningPracticePanel({
         {feedback.type ===
         "success" ? (
           <CheckCircle2
+            size={17}
+          />
+        ) : feedback.type ===
+          "error" ? (
+          <CircleAlert
             size={17}
           />
         ) : (
@@ -753,6 +854,7 @@ function LearningPracticePanel({
             }
           </strong>
 
+
           <p>
             {
               feedback.description
@@ -762,98 +864,137 @@ function LearningPracticePanel({
       </div>
 
 
-      {/* =====================
-          STATS
-      ===================== */}
+      {/* =====================================
+          PRACTICE STATS
+      ===================================== */}
 
       <div className="learning-practice-stats">
+        {/* ATTEMPTS */}
+
         <div>
           <span>
             Percobaan
           </span>
 
+
           <strong>
             {
-              progress.attempts
+              progress?.attempts
+              ??
+              0
             }
           </strong>
         </div>
 
+
+        {/* VALID */}
 
         <div>
           <span>
             Valid
           </span>
 
+
           <strong>
             {
               progress
-                .validRepetitions
+                ?.validRepetitions
+              ??
+              0
             }
           </strong>
         </div>
 
+
+        {/* INVALID */}
 
         <div>
           <span>
             Belum Valid
           </span>
 
+
           <strong>
             {
               progress
-                .invalidRepetitions
+                ?.invalidRepetitions
+              ??
+              0
             }
           </strong>
         </div>
 
+
+        {/* AVG CONFIDENCE */}
 
         <div>
           <span>
             Avg. Confidence
           </span>
 
+
           <strong>
-            {progress
-              .validRepetitions >
-            0
+            {Number(
+              progress
+                ?.validRepetitions
+              ??
+              0
+            ) > 0
               ? (
                   `${Number(
                     progress
-                      .averageConfidence
+                      ?.averageConfidence
+                    ??
+                    0
                   ).toFixed(1)}%`
                 )
-              : "--"}
+              : (
+                  "--"
+                )}
           </strong>
         </div>
 
+
+        {/* BEST CONFIDENCE */}
 
         <div>
           <span>
             Best
           </span>
 
+
           <strong>
-            {progress
-              .bestConfidence >
-            0
+            {Number(
+              progress
+                ?.bestConfidence
+              ??
+              0
+            ) > 0
               ? (
                   `${Number(
                     progress
-                      .bestConfidence
+                      ?.bestConfidence
+                    ??
+                    0
                   ).toFixed(1)}%`
                 )
-              : "--"}
+              : (
+                  "--"
+                )}
           </strong>
         </div>
       </div>
 
 
-      {/* =====================
+      {/* =====================================
           RESET
-      ===================== */}
+      ===================================== */}
 
-      {progress.attempts > 0 && (
+      {Number(
+        progress?.attempts
+        ??
+        0
+      ) > 0 && (
         <button
           type="button"
           className="learning-practice-reset"
@@ -863,27 +1004,49 @@ function LearningPracticePanel({
                 (
                   `Reset latihan "${lesson.word}" `
                   +
-                  "kembali ke 0/10?"
+                  `kembali ke 0/${
+                    PRACTICE_RULES
+                      .requiredRepetitions
+                  }?`
                 )
               );
 
 
-            if (confirmed) {
-              onReset(
-                lesson.id
-              );
-
-
-              setFeedback({
-                type: "idle",
-
-                title:
-                  "Progress direset",
-
-                description:
-                  "Latihan kembali ke 0/10.",
-              });
+            if (!confirmed) {
+              return;
             }
+
+
+            onReset(
+              lesson.id
+            );
+
+
+            /*
+             * Supaya event terakhir tidak
+             * langsung terhitung lagi
+             * setelah reset.
+             */
+            lastAcceptedEventRef.current =
+              currentEventKey;
+
+
+            setFeedback({
+              type: "idle",
+
+              title:
+                "Progress direset",
+
+              description:
+                (
+                  "Latihan kembali ke "
+                  +
+                  `0/${
+                    PRACTICE_RULES
+                      .requiredRepetitions
+                  }.`
+                ),
+            });
           }}
         >
           <RotateCcw
