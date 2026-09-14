@@ -1044,10 +1044,12 @@ class MultimodalSequenceBuilder:
     def __init__(
         self,
         sequence_length=SEQ_LEN,
+        max_interp_gap=MAX_INTERP_GAP,
+        edge_fill=EDGE_FILL,
     ):
-        self.sequence_length = (
-            int(sequence_length)
-        )
+        self.sequence_length = int(sequence_length)
+        self.max_interp_gap = int(max_interp_gap)
+        self.edge_fill = int(edge_fill)
 
         self.frames = deque(
             maxlen=self.sequence_length
@@ -1325,14 +1327,11 @@ class MultimodalSequenceBuilder:
                         dtype=np.float32,
                     ),
 
-                "multimodal":
-                    np.zeros(
-                        (
-                            0,
-                            FEATURE_DIM,
-                        ),
-                        dtype=np.float32,
-                    ),
+                "multimodal": np.zeros((0, FEATURE_DIM), dtype=np.float32),
+                "hand_mask": np.zeros((0, 2), dtype=np.uint8),
+                "pose_mask": np.zeros((0,), dtype=np.uint8),
+                "facehead_mask": np.zeros((0,), dtype=np.uint8),
+                "time_mask": np.zeros((0,), dtype=np.uint8),
             }
 
         # =========================
@@ -1528,10 +1527,9 @@ class MultimodalSequenceBuilder:
                 valid_mask,
             ) = (
                 interpolate_short_gaps_hand(
-                    hand_tracks[
-                        :,
-                        side,
-                    ]
+                    hand_tracks[:, side],
+                    max_gap=self.max_interp_gap,
+                    edge_fill=self.edge_fill,
                 )
             )
 
@@ -1582,6 +1580,11 @@ class MultimodalSequenceBuilder:
                 ),
                 dtype=np.float32,
             )
+        )
+
+        facehead_valid = np.zeros(
+            n,
+            dtype=np.uint8,
         )
 
         for index in range(n):
@@ -1644,7 +1647,7 @@ class MultimodalSequenceBuilder:
 
             (
                 face_feature,
-                _,
+                face_ok,
             ) = facehead_to_feature(
                 face_coords[index],
                 face_visibility[index],
@@ -1653,9 +1656,8 @@ class MultimodalSequenceBuilder:
                 body_scales[index],
             )
 
-            facehead_sequence[
-                index
-            ] = face_feature
+            facehead_sequence[index] = face_feature
+            facehead_valid[index] = int(face_ok)
 
         multimodal = np.concatenate(
             [
@@ -1717,17 +1719,14 @@ class MultimodalSequenceBuilder:
                 )
 
         return {
-            "hand":
-                hand_sequence,
-
-            "pose":
-                pose_sequence,
-
-            "facehead":
-                facehead_sequence,
-
-            "multimodal":
-                multimodal,
+            "hand": hand_sequence,
+            "pose": pose_sequence,
+            "facehead": facehead_sequence,
+            "multimodal": multimodal,
+            "hand_mask": hand_final_valid.astype(np.uint8),
+            "pose_mask": pose_frame_valid.astype(np.uint8),
+            "facehead_mask": facehead_valid.astype(np.uint8),
+            "time_mask": np.ones(n, dtype=np.uint8),
         }
 
 

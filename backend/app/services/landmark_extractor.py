@@ -46,68 +46,56 @@ DETECTOR_LOW_P10 = 34.0
 
 
 class LandmarkExtractor:
-    def __init__(self):
+    def __init__(self, profile="legacy_v1"):
+        self.profile = str(profile or "legacy_v1")
+        self.exact_v32 = self.profile == "v32_exact"
+        self.use_detector_enhancement = not self.exact_v32
+        self.use_full_frame_fallback = not self.exact_v32
+
         self.mp_hands = mp.solutions.hands
         self.mp_pose = mp.solutions.pose
 
-        # ====================================================
-        # PRIMARY HANDS
-        # ====================================================
+        self.prev_left_wrist = None
+        self.prev_right_wrist = None
 
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=2,
             model_complexity=0,
-            min_detection_confidence=(
-                FULL_HAND_DET_CONF
-            ),
-            min_tracking_confidence=(
-                FULL_HAND_TRACK_CONF
-            ),
+            min_detection_confidence=FULL_HAND_DET_CONF,
+            min_tracking_confidence=FULL_HAND_TRACK_CONF,
         )
 
-        # ====================================================
-        # FULL-FRAME FALLBACK
-        # ====================================================
-
-        self.fallback_hands = (
-            self.mp_hands.Hands(
+        self.fallback_hands = None
+        if self.use_full_frame_fallback:
+            self.fallback_hands = self.mp_hands.Hands(
                 static_image_mode=True,
                 max_num_hands=2,
                 model_complexity=0,
-                min_detection_confidence=(
-                    FALLBACK_HAND_DET_CONF
-                ),
+                min_detection_confidence=FALLBACK_HAND_DET_CONF,
             )
+
+        self.recovery_hands = self.mp_hands.Hands(
+            static_image_mode=True,
+            max_num_hands=1,
+            model_complexity=0,
+            min_detection_confidence=RECOVERY_DET_CONF,
         )
 
-        # ====================================================
-        # ROI RECOVERY
-        # ====================================================
-
-        self.recovery_hands = (
-            self.mp_hands.Hands(
-                static_image_mode=True,
-                max_num_hands=1,
-                model_complexity=0,
-                min_detection_confidence=(
-                    RECOVERY_DET_CONF
-                ),
-            )
-        )
-
-        # ====================================================
-        # POSE
-        # ====================================================
-
+        # V3.2 preprocessing used Pose model_complexity=1 with 0.40/0.40.
+        # Legacy V1 keeps the old lighter 0/0.30/0.30 setup.
         self.pose = self.mp_pose.Pose(
             static_image_mode=False,
-            model_complexity=0,
+            model_complexity=(1 if self.exact_v32 else 0),
             smooth_landmarks=True,
             enable_segmentation=False,
-            min_detection_confidence=0.30,
-            min_tracking_confidence=0.30,
+            min_detection_confidence=(0.40 if self.exact_v32 else 0.30),
+            min_tracking_confidence=(0.40 if self.exact_v32 else 0.30),
         )
+
+    def reset_temporal_state(self):
+        self.prev_left_wrist = None
+        self.prev_right_wrist = None
 
     # ========================================================
     # DECODE JPEG
@@ -547,8 +535,16 @@ class LandmarkExtractor:
             return assigned
 
         anchors = {
-            "leftHand": left_pose_wrist,
-            "rightHand": right_pose_wrist,
+            "leftHand": (
+                left_pose_wrist
+                if left_pose_wrist is not None
+                else self.prev_left_wrist
+            ),
+            "rightHand": (
+                right_pose_wrist
+                if right_pose_wrist is not None
+                else self.prev_right_wrist
+            ),
         }
 
         # ====================================================
@@ -954,11 +950,17 @@ class LandmarkExtractor:
             frame_bytes
         )
 
-        detector_frame, enhanced_used, light_stats = (
-            self.prepare_detector_frame(
-                frame_bgr
-            )
-        )
+        if self.use_detector_enhancement:
+            detector_frame, enhanced_used, light_stats = self.prepare_detector_frame(frame_bgr)
+        else:
+            detector_frame = frame_bgr
+            enhanced_used = False
+            light_stats = {
+                "center_mean": float(cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY).mean()),
+                "p10": 0.0,
+                "p90": 0.0,
+                "enhanced": False,
+            }
 
         frame_rgb = cv2.cvtColor(
             detector_frame,
@@ -997,7 +999,7 @@ class LandmarkExtractor:
         fallback_used = False
 
         # Full-frame fallback bila primary detector gagal total.
-        if not candidates:
+        if not candidates and self.use_full_frame_fallback and self.fallback_hands is not None:
             fallback_result = (
                 self.fallback_hands.process(
                     frame_rgb
@@ -1044,6 +1046,11 @@ class LandmarkExtractor:
                 right_pose_wrist,
                 body_scale,
             )
+
+        if assigned["leftHand"] is not None:
+            self.prev_left_wrist = assigned["leftHand"][0].copy()
+        if assigned["rightHand"] is not None:
+            self.prev_right_wrist = assigned["rightHand"][0].copy()
 
         output = {
             "leftHand": self.array_to_points(

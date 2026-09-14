@@ -108,6 +108,31 @@ def safe_float(
         return float(default)
 
 
+def frame_timestamp_seconds(message):
+    """Prefer client capture time when provided; otherwise use server monotonic time."""
+    for key in ("timestamp_ms", "capture_timestamp_ms", "client_timestamp_ms"):
+        value = message.get(key)
+        if value is not None:
+            try:
+                value = float(value)
+                if value == value:
+                    return value / 1000.0
+            except Exception:
+                pass
+
+    value = message.get("timestamp")
+    if value is not None:
+        try:
+            value = float(value)
+            if value == value:
+                # epoch/performance timestamps can arrive in ms; small values are seconds.
+                return value / 1000.0 if value > 1e6 else value
+        except Exception:
+            pass
+
+    return time.monotonic()
+
+
 def prediction_margin(
     raw_prediction,
 ):
@@ -469,15 +494,22 @@ async def realtime_websocket(
     frame_count = 0
     last_client_frame_id = None
 
-    sequence_builder = (
-        RealtimeSequenceBuilder(
-            sequence_length=(
-                SEQUENCE_LENGTH
-            )
-        )
-    )
+    runtime_generation = model_runtime.generation
 
-    extractor = LandmarkExtractor()
+    def create_pipeline_components():
+        profile = model_runtime.get_preprocessing_profile()
+        builder = RealtimeSequenceBuilder(
+            sequence_length=SEQUENCE_LENGTH,
+            window_seconds=profile.get("window_seconds"),
+            max_interp_gap=profile.get("max_interp_gap", 6),
+            edge_fill=profile.get("edge_fill", 2),
+        )
+        vision = LandmarkExtractor(
+            profile=profile.get("vision_profile", "legacy_v1")
+        )
+        return builder, vision
+
+    sequence_builder, extractor = create_pipeline_components()
 
     prediction_history = deque(
         maxlen=VOTE_WINDOW,
@@ -516,6 +548,10 @@ async def realtime_websocket(
         last_client_frame_id = None
 
         sequence_builder.reset()
+        try:
+            extractor.reset_temporal_state()
+        except Exception:
+            pass
 
         prediction_history.clear()
 
@@ -530,6 +566,20 @@ async def realtime_websocket(
 
         accepted_event_counter = 0
         stable_votes = 0
+
+    def rebuild_pipeline_for_active_model():
+        nonlocal sequence_builder
+        nonlocal extractor
+        nonlocal runtime_generation
+
+        old_extractor = extractor
+        sequence_builder, extractor = create_pipeline_components()
+        runtime_generation = model_runtime.generation
+        try:
+            old_extractor.close()
+        except Exception:
+            pass
+        reset_runtime_state()
 
     # ========================================================
     # CONNECTION READY
@@ -565,6 +615,9 @@ async def realtime_websocket(
             "model_status": (
                 model_runtime.status
             ),
+            "model_version": model_runtime.active_version,
+            "runtime_schema": model_runtime.runtime_schema,
+            "window_duration_sec": model_runtime.get_window_seconds(),
             "server_time": utc_now(),
         }
     )
@@ -637,6 +690,25 @@ async def realtime_websocket(
                 continue
 
             # =================================================
+            # HOT-SWITCH MODEL (optional WebSocket UI path)
+            # =================================================
+
+            if message_type in ("select_model", "switch_model"):
+                version = str(message.get("version", "")).strip()
+                success = model_runtime.switch(version)
+                if success:
+                    rebuild_pipeline_for_active_model()
+                await websocket.send_json({
+                    "type": "model_selected",
+                    "success": bool(success),
+                    "version": model_runtime.active_version,
+                    "model": model_runtime.get_status(),
+                    "error": model_runtime.error,
+                    "server_time": utc_now(),
+                })
+                continue
+
+            # =================================================
             # RESET
             # =================================================
 
@@ -668,6 +740,9 @@ async def realtime_websocket(
             if message_type != "frame":
                 continue
 
+            if model_runtime.generation != runtime_generation:
+                rebuild_pipeline_for_active_model()
+
             frame_id = None
 
             try:
@@ -695,6 +770,8 @@ async def realtime_websocket(
                         0,
                     )
                 )
+
+                frame_timestamp_sec = frame_timestamp_seconds(message)
 
                 # =============================================
                 # NEW CAMERA SESSION
@@ -748,6 +825,7 @@ async def realtime_websocket(
                         vision_result[
                             "landmarks"
                         ],
+                        timestamp_sec=frame_timestamp_sec,
                     )
                 )
 
@@ -1129,6 +1207,9 @@ async def realtime_websocket(
                         "type": "landmarks",
                         "status": "ok",
                         "frame_id": frame_id,
+                        "model_version": model_runtime.active_version,
+                        "runtime_schema": model_runtime.runtime_schema,
+                        "window_duration_sec": model_runtime.get_window_seconds(),
                         "width": width,
                         "height": height,
                         "frame_bytes": len(
@@ -1163,7 +1244,7 @@ async def realtime_websocket(
                         ),
                         "continuous": {
                             "mode": (
-                                "rolling_48_temporal_vote"
+                                ("rolling_2.2s_resampled_vote" if sequence_builder.time_aware else "rolling_48_temporal_vote")
                             ),
                             "window_count": (
                                 window_count

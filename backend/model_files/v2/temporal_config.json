@@ -1,0 +1,27 @@
+{
+  "version": "v32_auto_temporal",
+  "selection_uses_signers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "test_signer_excluded_from_selection": 4,
+  "selection_mode": "target_feasible_best_score",
+  "sequence_length": 48,
+  "window_duration_sec": 2.2,
+  "window_shift_fractions": {
+    "center": 0.0,
+    "early": -0.05,
+    "late": 0.05
+  },
+  "min_gesture_coverage": 0.7,
+  "max_pad_ratio": 0.3,
+  "min_time_valid_train": 0.6699999999999999,
+  "boundary_clamping": true,
+  "duplicate_windows_excluded_from_training": true,
+  "dev_video_retention": 0.96796875,
+  "dev_center_retention": 0.96796875,
+  "worst_class_retention": 0.8,
+  "signer4_audit_retention": 0.89375
+}

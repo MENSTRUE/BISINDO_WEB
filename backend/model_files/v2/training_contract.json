@@ -1,0 +1,38 @@
+{
+  "preprocess_version": "multimodal222_v32_auto_temporal",
+  "sequence_length": 48,
+  "temporal_selection": "auto-search on development signers 0-3 only",
+  "window_duration_sec": 2.2,
+  "window_shift_fractions": {
+    "center": 0.0,
+    "early": -0.05,
+    "late": 0.05
+  },
+  "min_gesture_coverage": 0.7,
+  "max_pad_ratio": 0.3,
+  "min_time_valid_train": 0.6699999999999999,
+  "boundary_clamping": true,
+  "duplicate_windows_excluded_from_training": true,
+  "inputs": {
+    "hand": [
+      48,
+      134
+    ],
+    "pose": [
+      48,
+      36
+    ],
+    "facehead": [
+      48,
+      52
+    ]
+  },
+  "training_indices_file": "recommended_training_indices.npy",
+  "canonical_center_indices_file": "canonical_center_training_indices.npy",
+  "temporal_search_results_file": "temporal_search_results.csv",
+  "split_rule": "split by signer/source_video before any model selection; never split sibling windows from one source video across train/val/test",
+  "test_signer": 4,
+  "test_signer_used_for_temporal_selection": false,
+  "frame_orientation": "original_non_mirrored",
+  "no_sign_class_added": false
+}
