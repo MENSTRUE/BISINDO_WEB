@@ -11,6 +11,10 @@ import {
 } from "react-router-dom";
 
 import {
+  ModelProvider,
+} from "./contexts/ModelContext";
+
+import {
   RealtimeProvider,
 } from "./contexts/RealtimeContext";
 
@@ -34,9 +38,11 @@ createRoot(
   <StrictMode>
     <ThemeProvider>
       <BrowserRouter>
-        <RealtimeProvider>
-          <App />
-        </RealtimeProvider>
+        <ModelProvider>
+          <RealtimeProvider>
+            <App />
+          </RealtimeProvider>
+        </ModelProvider>
       </BrowserRouter>
     </ThemeProvider>
   </StrictMode>,

@@ -22,127 +22,347 @@ import {
   useState,
 } from "react";
 
+import {
+  useModel,
+} from "../contexts/ModelContext";
+
 import "../styles/models.css";
 
 
-const MODEL_INFO = {
-  version:
-    "v1",
+/* =========================================================
+   MODEL CATALOG
+========================================================= */
 
-  name:
-    "WL-BISINDO Multimodal Temporal Transformer",
+const MODEL_CATALOG = {
+  v1: {
+    version:
+      "v1",
 
-  runtime:
-    "TorchScript",
+    shortName:
+      "Legacy",
 
-  modelFile:
-    "wl_bisindo_multimodal_traced.pt",
+    name:
+      "WL-BISINDO Multimodal Temporal Transformer",
 
-  winnerMode:
-    "C",
+    runtime:
+      "TorchScript",
 
-  winnerName:
-    "Hand134 + Pose36 + FaceHead52",
+    modelFile:
+      "wl_bisindo_multimodal_traced.pt",
 
-  sequenceLength:
-    48,
+    winnerMode:
+      "C",
 
-  numClasses:
-    32,
+    winnerName:
+      "Hand134 + Pose36 + FaceHead52 + FaceCrop",
 
-  bestEpoch:
-    50,
+    sequenceLength:
+      48,
 
-  devAccuracy:
-    95.95,
+    numClasses:
+      32,
 
-  devMacroF1:
-    95.50,
+    bestEpoch:
+      50,
 
-  testAccuracy:
-    87.81,
+    devAccuracy:
+      95.95,
 
-  testMacroF1:
-    87.11,
+    devMacroF1:
+      95.50,
 
-  testSigner:
-    4,
+    testAccuracy:
+      87.81,
 
-  devSigner:
-    1,
+    testMacroF1:
+      87.11,
+
+    testSigner:
+      4,
+
+    devSigner:
+      1,
+
+    pipeline:
+      "Legacy Pipeline",
+
+    description:
+      "Model multimodal temporal generasi pertama untuk mengenali kosakata BISINDO dari sequence landmark secara real-time.",
+
+    productionLabel:
+      "Production Model V1",
+
+    inputDescription:
+      "Empat stream multimodal pada pipeline legacy.",
+  },
+
+
+  v2: {
+    version:
+      "v2",
+
+    shortName:
+      "Multimodal",
+
+    name:
+      "WL-BISINDO Multimodal CNN-BiLSTM",
+
+    runtime:
+      "TorchScript",
+
+    modelFile:
+      "wl_bisindo_multimodal_traced.pt",
+
+    winnerMode:
+      "V3.2",
+
+    winnerName:
+      "Hand134 + Pose36 + FaceHead52 + Validity Masks",
+
+    sequenceLength:
+      48,
+
+    numClasses:
+      32,
+
+    bestEpoch:
+      32,
+
+    devAccuracy:
+      84.16,
+
+    devMacroF1:
+      83.32,
+
+    testAccuracy:
+      82.81,
+
+    testMacroF1:
+      81.48,
+
+    testSigner:
+      4,
+
+    devSigner:
+      3,
+
+    pipeline:
+      "Time-Aware V3.2",
+
+    description:
+      "Model signer-independent berbasis temporal CNN, BiLSTM, masked attention, dan preprocessing V3.2 time-aware.",
+
+    productionLabel:
+      "Production Model V2",
+
+    inputDescription:
+      "Tiga stream fitur multimodal dengan empat validity mask untuk inference real-time.",
+  },
 };
 
 
-const INPUT_STREAMS = [
-  {
-    id:
-      "hand",
+/* =========================================================
+   INPUT STREAMS
+========================================================= */
 
-    label:
-      "Hand",
+const MODEL_INPUT_STREAMS = {
+  v1: [
+    {
+      id:
+        "hand",
 
-    shape:
-      "48 × 134",
+      label:
+        "Hand",
 
-    description:
-      "Landmark tangan kiri dan kanan",
+      shape:
+        "48 × 134",
 
-    icon:
-      Hand,
-  },
+      description:
+        "Landmark tangan kiri dan kanan",
 
-  {
-    id:
-      "pose",
+      icon:
+        Hand,
+    },
 
-    label:
-      "Pose",
+    {
+      id:
+        "pose",
 
-    shape:
-      "48 × 36",
+      label:
+        "Pose",
 
-    description:
-      "Fitur pose tubuh bagian atas",
+      shape:
+        "48 × 36",
 
-    icon:
-      UserRound,
-  },
+      description:
+        "Fitur pose tubuh bagian atas",
 
-  {
-    id:
-      "facehead",
+      icon:
+        UserRound,
+    },
 
-    label:
-      "FaceHead",
+    {
+      id:
+        "facehead",
 
-    shape:
-      "48 × 52",
+      label:
+        "FaceHead",
 
-    description:
-      "Fitur kepala dan wajah",
+      shape:
+        "48 × 52",
 
-    icon:
-      Eye,
-  },
+      description:
+        "Fitur kepala dan wajah",
 
-  {
-    id:
-      "facecrop",
+      icon:
+        Eye,
+    },
 
-    label:
-      "Face Crop",
+    {
+      id:
+        "facecrop",
 
-    shape:
-      "48 × 48 × 48",
+      label:
+        "Face Crop",
 
-    description:
-      "Input crop wajah pada signature runtime",
+      shape:
+        "48 × 48 × 48",
 
-    icon:
-      Database,
-  },
-];
+      description:
+        "Input crop wajah pada signature runtime legacy",
 
+      icon:
+        Database,
+    },
+  ],
+
+
+  v2: [
+    {
+      id:
+        "hand",
+
+      label:
+        "Hand",
+
+      shape:
+        "48 × 134",
+
+      description:
+        "Landmark tangan kiri dan kanan",
+
+      icon:
+        Hand,
+    },
+
+    {
+      id:
+        "pose",
+
+      label:
+        "Pose",
+
+      shape:
+        "48 × 36",
+
+      description:
+        "Fitur pose tubuh bagian atas",
+
+      icon:
+        UserRound,
+    },
+
+    {
+      id:
+        "facehead",
+
+      label:
+        "FaceHead",
+
+      shape:
+        "48 × 52",
+
+      description:
+        "Fitur kepala dan wajah",
+
+      icon:
+        Eye,
+    },
+
+    {
+      id:
+        "hand-mask",
+
+      label:
+        "Hand Mask",
+
+      shape:
+        "48 × 2",
+
+      description:
+        "Validitas tangan kiri dan kanan",
+
+      icon:
+        Binary,
+    },
+
+    {
+      id:
+        "pose-mask",
+
+      label:
+        "Pose Mask",
+
+      shape:
+        "48",
+
+      description:
+        "Validitas pose pada setiap timestep",
+
+      icon:
+        Activity,
+    },
+
+    {
+      id:
+        "facehead-mask",
+
+      label:
+        "FaceHead Mask",
+
+      shape:
+        "48",
+
+      description:
+        "Validitas fitur wajah dan kepala",
+
+      icon:
+        Eye,
+    },
+
+    {
+      id:
+        "time-mask",
+
+      label:
+        "Time Mask",
+
+      shape:
+        "48",
+
+      description:
+        "Validitas timestep pada fixed-time window",
+
+      icon:
+        Database,
+    },
+  ],
+};
+
+
+/* =========================================================
+   CLASS MAPPING
+========================================================= */
 
 const CLASS_MAPPING = [
   "Air",
@@ -180,7 +400,73 @@ const CLASS_MAPPING = [
 ];
 
 
+/* =========================================================
+   HELPER
+========================================================= */
+
+function getVersionLabel(
+  version
+) {
+  if (
+    version === "v1"
+  ) {
+    return "Model V1 · Legacy";
+  }
+
+
+  if (
+    version === "v2"
+  ) {
+    return "Model V2 · Multimodal";
+  }
+
+
+  return (
+    version?.toUpperCase() ||
+    "Unknown Model"
+  );
+}
+
+
+/* =========================================================
+   PAGE
+========================================================= */
+
 function ModelsPage() {
+  /* =========================
+     MODEL CONTEXT
+  ========================= */
+
+  const {
+    activeVersion,
+    versions,
+    changeModel,
+    switching,
+    loading:
+      modelLoading,
+    error:
+      modelError,
+  } = useModel();
+
+
+  const MODEL_INFO =
+    MODEL_CATALOG[
+      activeVersion
+    ] ||
+    MODEL_CATALOG.v1;
+
+
+  const INPUT_STREAMS =
+    MODEL_INPUT_STREAMS[
+      activeVersion
+    ] ||
+    MODEL_INPUT_STREAMS.v1;
+
+
+  /* =========================
+     PAGE STATE
+  ========================= */
+
   const [
     search,
     setSearch,
@@ -193,6 +479,48 @@ function ModelsPage() {
   ] = useState(false);
 
 
+  /* =========================
+     MODEL OPTIONS
+  ========================= */
+
+  const modelOptions =
+    useMemo(() => {
+      if (
+        Array.isArray(
+          versions
+        ) &&
+        versions.length > 0
+      ) {
+        return versions;
+      }
+
+
+      return [
+        {
+          version:
+            "v1",
+
+          ready:
+            true,
+        },
+
+        {
+          version:
+            "v2",
+
+          ready:
+            true,
+        },
+      ];
+    }, [
+      versions,
+    ]);
+
+
+  /* =========================
+     CLASS FILTER
+  ========================= */
+
   const filteredClasses =
     useMemo(() => {
       const normalized =
@@ -201,7 +529,9 @@ function ModelsPage() {
           .toLowerCase();
 
 
-      if (!normalized) {
+      if (
+        !normalized
+      ) {
         return CLASS_MAPPING;
       }
 
@@ -214,7 +544,6 @@ function ModelsPage() {
               normalized
             )
       );
-
     }, [
       search,
     ]);
@@ -228,6 +557,10 @@ function ModelsPage() {
           16
         );
 
+
+  /* =========================
+     METRICS
+  ========================= */
 
   const metrics = [
     {
@@ -300,11 +633,52 @@ function ModelsPage() {
   ];
 
 
+  /* =========================
+     MODEL SWITCH
+  ========================= */
+
+  const handleModelChange =
+    async (
+      event
+    ) => {
+      const version =
+        event.target.value;
+
+
+      if (
+        !version ||
+        version ===
+          activeVersion ||
+        switching
+      ) {
+        return;
+      }
+
+
+      try {
+        await changeModel(
+          version
+        );
+      } catch (
+        error
+      ) {
+        console.error(
+          "[ModelsPage] model switch failed:",
+          error
+        );
+      }
+    };
+
+
+  /* =========================
+     RENDER
+  ========================= */
+
   return (
     <div className="models-page">
       {/* =========================
           HEADING
-      ========================= */}
+      ========================== */}
 
       <section className="models-heading">
         <div>
@@ -325,27 +699,176 @@ function ModelsPage() {
         </div>
 
 
+        {/* =========================
+            MODEL SELECTOR
+        ========================== */}
+
         <div className="models-active-badge">
           <span className="models-active-dot" />
 
-          <div>
+          <div
+            style={{
+              minWidth:
+                "150px",
+            }}
+          >
             <span>
               Active Model
             </span>
 
-            <strong>
-              {MODEL_INFO.version}
-              {" · "}
-              Words
-            </strong>
+            <select
+              value={
+                activeVersion ||
+                "v1"
+              }
+              disabled={
+                switching ||
+                modelLoading
+              }
+              onChange={
+                handleModelChange
+              }
+              aria-label="Pilih model aktif"
+              style={{
+                display:
+                  "block",
+
+                width:
+                  "100%",
+
+                marginTop:
+                  "2px",
+
+                border:
+                  "none",
+
+                outline:
+                  "none",
+
+                background:
+                  "transparent",
+
+                color:
+                  "inherit",
+
+                fontFamily:
+                  "inherit",
+
+                fontSize:
+                  "11px",
+
+                fontWeight:
+                  "700",
+
+                cursor:
+                  switching
+                    ? "wait"
+                    : "pointer",
+              }}
+            >
+              {modelOptions.map(
+                (
+                  model
+                ) => {
+                  const version =
+                    model.version ||
+                    model.id;
+
+
+                  return (
+                    <option
+                      key={
+                        version
+                      }
+                      value={
+                        version
+                      }
+                      disabled={
+                        model.ready ===
+                        false
+                      }
+                      style={{
+                        background:
+                          "#0b1c2f",
+
+                        color:
+                          "#ffffff",
+                      }}
+                    >
+                      {
+                        getVersionLabel(
+                          version
+                        )
+                      }
+                    </option>
+                  );
+                }
+              )}
+            </select>
+
+
+            {switching && (
+              <small
+                style={{
+                  display:
+                    "block",
+
+                  marginTop:
+                    "3px",
+
+                  color:
+                    "#59a9ff",
+                }}
+              >
+                Switching...
+              </small>
+            )}
           </div>
         </div>
       </section>
 
 
       {/* =========================
+          MODEL ERROR
+      ========================== */}
+
+      {modelError && (
+        <div
+          style={{
+            marginBottom:
+              "16px",
+
+            padding:
+              "10px 12px",
+
+            border:
+              "1px solid rgba(239, 68, 68, 0.3)",
+
+            borderRadius:
+              "10px",
+
+            background:
+              "rgba(239, 68, 68, 0.08)",
+
+            color:
+              "#fca5a5",
+
+            fontSize:
+              "11px",
+          }}
+        >
+          Model API:
+          {" "}
+          {
+            modelError
+          }
+        </div>
+      )}
+
+
+      {/* =========================
           HERO MODEL
-      ========================= */}
+      ========================== */}
 
       <section className="models-hero">
         <div className="models-hero-content">
@@ -355,20 +878,25 @@ function ModelsPage() {
               strokeWidth={1.8}
             />
 
-            Production Model
+            {
+              MODEL_INFO
+                .productionLabel
+            }
           </div>
 
 
           <h3>
-            {MODEL_INFO.name}
+            {
+              MODEL_INFO.name
+            }
           </h3>
 
 
           <p>
-            Model multimodal temporal
-            untuk mengenali kosakata
-            BISINDO dari sequence
-            landmark secara real-time.
+            {
+              MODEL_INFO
+                .description
+            }
           </p>
 
 
@@ -388,8 +916,9 @@ function ModelsPage() {
                 size={13}
               />
 
-              Mode {
-                MODEL_INFO.winnerMode
+              {
+                MODEL_INFO
+                  .pipeline
               }
             </span>
 
@@ -399,7 +928,8 @@ function ModelsPage() {
               />
 
               {
-                MODEL_INFO.sequenceLength
+                MODEL_INFO
+                  .sequenceLength
               } Frame
             </span>
           </div>
@@ -425,7 +955,9 @@ function ModelsPage() {
           <div className="model-status-chip">
             <span />
 
-            Model Ready
+            {switching
+              ? "Switching Model"
+              : "Model Ready"}
           </div>
         </div>
       </section>
@@ -433,11 +965,13 @@ function ModelsPage() {
 
       {/* =========================
           METRICS
-      ========================= */}
+      ========================== */}
 
       <section className="models-metrics-grid">
         {metrics.map(
-          (metric) => {
+          (
+            metric
+          ) => {
             const Icon =
               metric.icon;
 
@@ -487,7 +1021,7 @@ function ModelsPage() {
 
       {/* =========================
           DETAIL GRID
-      ========================= */}
+      ========================== */}
 
       <section className="models-detail-grid">
         {/* MODEL INFO */}
@@ -519,22 +1053,26 @@ function ModelsPage() {
 
               <strong>
                 {
-                  MODEL_INFO.version
+                  MODEL_INFO
+                    .version
                 }
               </strong>
             </div>
 
+
             <div>
               <span>
-                Winner Mode
+                Pipeline
               </span>
 
               <strong>
                 {
-                  MODEL_INFO.winnerMode
+                  MODEL_INFO
+                    .pipeline
                 }
               </strong>
             </div>
+
 
             <div>
               <span>
@@ -543,10 +1081,12 @@ function ModelsPage() {
 
               <strong>
                 {
-                  MODEL_INFO.winnerName
+                  MODEL_INFO
+                    .winnerName
                 }
               </strong>
             </div>
+
 
             <div>
               <span>
@@ -560,6 +1100,7 @@ function ModelsPage() {
               </strong>
             </div>
 
+
             <div>
               <span>
                 Model File
@@ -567,10 +1108,12 @@ function ModelsPage() {
 
               <strong className="model-file-name">
                 {
-                  MODEL_INFO.modelFile
+                  MODEL_INFO
+                    .modelFile
                 }
               </strong>
             </div>
+
 
             <div>
               <span>
@@ -579,7 +1122,8 @@ function ModelsPage() {
 
               <strong>
                 {
-                  MODEL_INFO.bestEpoch
+                  MODEL_INFO
+                    .bestEpoch
                 }
               </strong>
             </div>
@@ -609,6 +1153,8 @@ function ModelsPage() {
 
 
           <div className="performance-list">
+            {/* DEV ACCURACY */}
+
             <div className="performance-item">
               <div className="performance-item-heading">
                 <div>
@@ -644,6 +1190,8 @@ function ModelsPage() {
             </div>
 
 
+            {/* DEV MACRO F1 */}
+
             <div className="performance-item">
               <div className="performance-item-heading">
                 <div>
@@ -675,6 +1223,8 @@ function ModelsPage() {
               </div>
             </div>
 
+
+            {/* TEST ACCURACY */}
 
             <div className="performance-item">
               <div className="performance-item-heading">
@@ -710,6 +1260,8 @@ function ModelsPage() {
               </div>
             </div>
 
+
+            {/* TEST MACRO F1 */}
 
             <div className="performance-item">
               <div className="performance-item-heading">
@@ -748,7 +1300,7 @@ function ModelsPage() {
 
       {/* =========================
           INPUT STREAMS
-      ========================= */}
+      ========================== */}
 
       <section className="models-panel">
         <div className="models-panel-heading">
@@ -760,6 +1312,24 @@ function ModelsPage() {
             <h3>
               Input Model
             </h3>
+
+            <p
+              style={{
+                margin:
+                  "5px 0 0",
+
+                fontSize:
+                  "10px",
+
+                color:
+                  "var(--text-muted, #7890aa)",
+              }}
+            >
+              {
+                MODEL_INFO
+                  .inputDescription
+              }
+            </p>
           </div>
 
           <Database
@@ -771,7 +1341,9 @@ function ModelsPage() {
 
         <div className="model-input-grid">
           {INPUT_STREAMS.map(
-            (input) => {
+            (
+              input
+            ) => {
               const Icon =
                 input.icon;
 
@@ -819,7 +1391,7 @@ function ModelsPage() {
 
       {/* =========================
           CLASS LIBRARY
-      ========================= */}
+      ========================== */}
 
       <section className="models-panel">
         <div className="models-panel-heading class-heading">
@@ -829,7 +1401,10 @@ function ModelsPage() {
             </span>
 
             <h3>
-              32 Kelas BISINDO
+              {
+                MODEL_INFO
+                  .numClasses
+              } Kelas BISINDO
             </h3>
           </div>
 
@@ -877,7 +1452,9 @@ function ModelsPage() {
                 type="button"
                 aria-label="Hapus pencarian"
                 onClick={() =>
-                  setSearch("")
+                  setSearch(
+                    ""
+                  )
                 }
               >
                 <X
@@ -895,8 +1472,7 @@ function ModelsPage() {
             <div className="model-class-grid">
               {visibleClasses.map(
                 (
-                  label,
-                  visibleIndex
+                  label
                 ) => {
                   const classIndex =
                     CLASS_MAPPING
@@ -925,7 +1501,9 @@ function ModelsPage() {
 
                       <div>
                         <strong>
-                          {label}
+                          {
+                            label
+                          }
                         </strong>
 
                         <span>
@@ -953,7 +1531,9 @@ function ModelsPage() {
                 className="models-show-all"
                 onClick={() =>
                   setShowAllClasses(
-                    (current) =>
+                    (
+                      current
+                    ) =>
                       !current
                   )
                 }

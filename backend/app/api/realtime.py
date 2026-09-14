@@ -1,11 +1,14 @@
 import base64
 import time
 
-from collections import Counter, deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+from app.inference.gesture_segmenter import (
+    IsolatedGestureSegmenter,
+    build_segment_result,
+)
 from app.inference.model_runtime import model_runtime
 from app.inference.predictor import bisindo_predictor
 from app.preprocessing.realtime_sequence import RealtimeSequenceBuilder
@@ -22,45 +25,34 @@ router = APIRouter(
 # ============================================================
 
 MAX_FRAME_BYTES = 2_000_000
-
-
-# ============================================================
-# CONTINUOUS RECOGNITION CONFIG
-#
-# Disamakan dengan baseline Python lokal:
-# - rolling 48 frame
-# - inference setiap 2 frame
-# - vote window 3
-# - minimal 2 vote
-# - confidence 0.75
-# - margin 0.10
-# - valid hand ratio 0.25
-# - same-label rearm setelah 3 inference netral
-# - change cooldown 0.20 detik
-# ============================================================
-
 SEQUENCE_LENGTH = 48
-INFER_EVERY = 2
 
-MIN_CONFIDENCE = 0.75
-MIN_MARGIN = 0.10
-MIN_VALID_RATIO = 0.25
 
-VOTE_WINDOW = 3
-VOTE_HITS = 2
+# ============================================================
+# FINAL REALTIME ACCEPTANCE GATE
+#
+# IMPORTANT:
+# - Satu gesture selesai -> maksimal satu inference.
+# - Transcript hanya boleh commit ketika accepted_event=True.
+# - V2 tetap memakai fixed-time 2.2s -> 48 timestep melalui
+#   RealtimeSequenceBuilder yang membaca profile model_runtime.
+# ============================================================
 
-CHANGE_COOLDOWN_SECONDS = 0.20
-NEUTRAL_RESET_HITS = 3
+MIN_ACCEPT_CONFIDENCE = 0.78
+MIN_ACCEPT_MARGIN = 0.12
+MIN_VALID_HAND_RATIO = 0.25
 
 
 # ============================================================
 # HELPERS
 # ============================================================
 
+
 def utc_now():
     return datetime.now(
         timezone.utc,
     ).isoformat()
+
 
 
 def decode_frame_base64(
@@ -95,12 +87,14 @@ def decode_frame_base64(
     return frame_bytes
 
 
+
 def safe_float(
     value,
     default=0.0,
 ):
     try:
         return float(value)
+
     except (
         TypeError,
         ValueError,
@@ -108,29 +102,62 @@ def safe_float(
         return float(default)
 
 
-def frame_timestamp_seconds(message):
-    """Prefer client capture time when provided; otherwise use server monotonic time."""
-    for key in ("timestamp_ms", "capture_timestamp_ms", "client_timestamp_ms"):
-        value = message.get(key)
+
+def frame_timestamp_seconds(
+    message,
+):
+    """
+    Prefer waktu capture client jika tersedia.
+    Kalau frontend tidak mengirim timestamp,
+    gunakan monotonic server time.
+    """
+
+    for key in (
+        "timestamp_ms",
+        "capture_timestamp_ms",
+        "client_timestamp_ms",
+    ):
+        value = message.get(
+            key
+        )
+
         if value is not None:
             try:
-                value = float(value)
+                value = float(
+                    value
+                )
+
                 if value == value:
-                    return value / 1000.0
+                    return (
+                        value
+                        / 1000.0
+                    )
+
             except Exception:
                 pass
 
-    value = message.get("timestamp")
+    value = message.get(
+        "timestamp"
+    )
+
     if value is not None:
         try:
-            value = float(value)
+            value = float(
+                value
+            )
+
             if value == value:
-                # epoch/performance timestamps can arrive in ms; small values are seconds.
-                return value / 1000.0 if value > 1e6 else value
+                return (
+                    value / 1000.0
+                    if value > 1e6
+                    else value
+                )
+
         except Exception:
             pass
 
     return time.monotonic()
+
 
 
 def prediction_margin(
@@ -157,9 +184,15 @@ def prediction_margin(
     second = 0.0
 
     if (
-        isinstance(top3, list)
+        isinstance(
+            top3,
+            list,
+        )
         and len(top3) >= 2
-        and isinstance(top3[1], dict)
+        and isinstance(
+            top3[1],
+            dict,
+        )
     ):
         second = safe_float(
             top3[1].get(
@@ -174,98 +207,179 @@ def prediction_margin(
     )
 
 
-def build_segment_compat(
-    window_count,
-    accepted_event,
-    event_id,
-    inference_performed,
+
+def empty_prediction(
+    status="idle",
 ):
-    """
-    Payload compatibility untuk frontend lama.
-
-    Ini BUKAN isolated segmentation lagi.
-    Field `segment` hanya dipakai agar hook/UI lama
-    tetap dapat menampilkan warm-up / accepted state.
-    """
-
-    ready = (
-        int(window_count)
-        >= SEQUENCE_LENGTH
-    )
-
-    if not ready:
-        status = "recording"
-        reason = "rolling_warmup"
-
-    elif accepted_event:
-        status = "cooldown"
-        reason = "word_accepted"
-
-    elif inference_performed:
-        status = "waiting"
-        reason = "rolling_inference"
-
-    else:
-        status = "waiting"
-        reason = "rolling_ready"
-
     return {
         "status": status,
-        "reason": reason,
-        "segment_id": (
-            event_id
-            if event_id > 0
-            else None
-        ),
-        "source_frames": int(window_count),
-        "pre_roll_frames": 0,
-        "motion_score": 0.0,
-        "motion_ema": 0.0,
-        "peak_motion": 0.0,
-        "start_counter": 0,
-        "still_frames": 0,
-        "no_hand_frames": 0,
-        "rearm_still_frames": 0,
-        "result_event": bool(
-            accepted_event
-        ),
-        "thresholds": {
-            "start_motion": 0.0,
-            "end_motion": 0.0,
-            "start_consecutive_frames": 0,
-            "end_still_frames": 0,
-            "pre_roll_frames": 0,
-            "post_roll_frames": 0,
-            "min_segment_frames": SEQUENCE_LENGTH,
-            "max_segment_frames": SEQUENCE_LENGTH,
-            "rearm_motion": 0.0,
-            "rearm_still_frames": NEUTRAL_RESET_HITS,
-        },
+        "label": None,
+        "class_id": None,
+        "confidence": 0.0,
+        "confidence_percent": 0.0,
+        "top3": [],
+        "hand_present_frames": 0,
+        "inference_ms": None,
     }
+
+
+
+def apply_final_acceptance_gate(
+    result,
+):
+    """
+    build_segment_result() sudah punya gate dasar.
+    Di sini kita tambah gate deployment yang lebih konservatif
+    supaya transcript tidak gampang menerima transisi/noise.
+    """
+
+    result = (
+        dict(result)
+        if isinstance(
+            result,
+            dict,
+        )
+        else {}
+    )
+
+    confidence = safe_float(
+        result.get(
+            "confidence",
+            0.0,
+        )
+    )
+
+    margin = safe_float(
+        result.get(
+            "margin",
+            0.0,
+        )
+    )
+
+    hand_present_frames = int(
+        result.get(
+            "hand_present_frames",
+            0,
+        )
+        or 0
+    )
+
+    valid_ratio = (
+        hand_present_frames
+        / SEQUENCE_LENGTH
+    )
+
+    base_accepted = bool(
+        result.get(
+            "accepted",
+            False,
+        )
+    )
+
+    accepted = (
+        base_accepted
+        and confidence
+        >= MIN_ACCEPT_CONFIDENCE
+        and margin
+        >= MIN_ACCEPT_MARGIN
+        and valid_ratio
+        >= MIN_VALID_HAND_RATIO
+    )
+
+    result[
+        "accepted"
+    ] = bool(
+        accepted
+    )
+
+    result[
+        "valid_ratio"
+    ] = round(
+        valid_ratio,
+        4,
+    )
+
+    result[
+        "valid_ratio_percent"
+    ] = round(
+        valid_ratio
+        * 100.0,
+        2,
+    )
+
+    if (
+        not accepted
+        and result.get(
+            "status"
+        ) == "accepted"
+    ):
+        result[
+            "status"
+        ] = "uncertain"
+
+    thresholds = dict(
+        result.get(
+            "thresholds",
+            {}
+        )
+    )
+
+    thresholds.update(
+        {
+            "deployment_min_confidence": (
+                MIN_ACCEPT_CONFIDENCE
+            ),
+            "deployment_min_margin": (
+                MIN_ACCEPT_MARGIN
+            ),
+            "deployment_min_valid_hand_ratio": (
+                MIN_VALID_HAND_RATIO
+            ),
+        }
+    )
+
+    result[
+        "thresholds"
+    ] = thresholds
+
+    return result
+
 
 
 def build_prediction_payload(
     *,
-    display_prediction,
     raw_prediction,
-    inference_performed,
+    display_prediction,
     accepted_event,
+    inference_performed,
     event_id,
-    build_ms,
-    history_size,
-    stable_votes,
-    neutral_streak,
-    same_label_rearmed,
+    segment_id,
+    sequence_build_ms,
 ):
+    """
+    Payload dibuat kompatibel dengan frontend lama,
+    tapi event transcript dibuat event-only.
+
+    PENTING:
+    result_event == accepted_event
+    bukan == inference_performed.
+    """
+
     raw_prediction = (
         raw_prediction
-        if isinstance(raw_prediction, dict)
+        if isinstance(
+            raw_prediction,
+            dict,
+        )
         else {}
     )
 
     display_prediction = (
         display_prediction
-        if isinstance(display_prediction, dict)
+        if isinstance(
+            display_prediction,
+            dict,
+        )
         else None
     )
 
@@ -288,7 +402,7 @@ def build_prediction_payload(
         or 0
     )
 
-    valid_ratio = (
+    raw_valid_ratio = (
         raw_hand_present_frames
         / SEQUENCE_LENGTH
     )
@@ -316,7 +430,12 @@ def build_prediction_payload(
             )
         )
 
-        accepted = bool(label)
+        valid_ratio = safe_float(
+            display_prediction.get(
+                "valid_ratio",
+                raw_valid_ratio,
+            )
+        )
 
         status = (
             "accepted"
@@ -335,19 +454,23 @@ def build_prediction_payload(
 
         confidence = raw_confidence
         margin = raw_margin
-        accepted = False
+        valid_ratio = raw_valid_ratio
 
         raw_status = raw_prediction.get(
             "status",
             "idle",
         )
 
-        if raw_status == "model_not_loaded":
-            status = "model_not_loaded"
-        elif raw_status == "waiting_for_hand":
-            status = "waiting_for_hand"
+        if raw_status in (
+            "model_not_loaded",
+            "waiting_for_hand",
+            "warming_up",
+        ):
+            status = raw_status
+
         elif inference_performed:
-            status = "stabilizing"
+            status = "uncertain"
+
         else:
             status = "idle"
 
@@ -357,23 +480,38 @@ def build_prediction_payload(
             "status",
             "idle",
         ),
-        "accepted": accepted,
+
+        # Event-only.
+        # Jangan dipakai sebagai persistent state.
+        "accepted": bool(
+            accepted_event
+        ),
         "result_event": bool(
-            inference_performed
+            accepted_event
         ),
         "accepted_event": bool(
             accepted_event
         ),
+
+        "event_id": (
+            int(event_id)
+            if accepted_event
+            else None
+        ),
+        "segment_id": segment_id,
+
         "class_id": class_id,
         "label": label,
         "confidence": confidence,
         "confidence_percent": round(
-            confidence * 100.0,
+            confidence
+            * 100.0,
             2,
         ),
         "margin": margin,
         "margin_percent": round(
-            margin * 100.0,
+            margin
+            * 100.0,
             2,
         ),
         "top3": (
@@ -398,86 +536,98 @@ def build_prediction_payload(
             4,
         ),
         "valid_ratio_percent": round(
-            valid_ratio * 100.0,
+            valid_ratio
+            * 100.0,
             2,
         ),
         "inference_ms": raw_prediction.get(
             "inference_ms"
         ),
-        "segment_id": (
-            event_id
-            if event_id > 0
+        "source_frames": (
+            display_prediction.get(
+                "source_frames",
+                0,
+            )
+            if display_prediction
+            else 0
+        ),
+        "sampled_frames": SEQUENCE_LENGTH,
+        "sequence_build_ms": round(
+            safe_float(
+                sequence_build_ms
+            ),
+            2,
+        ),
+        "end_reason": (
+            display_prediction.get(
+                "end_reason"
+            )
+            if display_prediction
             else None
         ),
-        "source_frames": SEQUENCE_LENGTH,
-        "sampled_frames": SEQUENCE_LENGTH,
-        "unique_sampled_frames": SEQUENCE_LENGTH,
-        "sequence_build_ms": round(
-            safe_float(build_ms),
-            2,
-        ),
-        "end_reason": "rolling_window",
-        "peak_motion": 0.0,
-        "votes": int(
-            stable_votes
-        ),
-        "required_votes": VOTE_HITS,
-        "window_size": int(
-            history_size
-        ),
-        "vote_window": VOTE_WINDOW,
-        "neutral_streak": int(
-            neutral_streak
-        ),
-        "same_label_rearmed": bool(
-            same_label_rearmed
-        ),
-        "raw_class_id": raw_prediction.get(
-            "class_id"
-        ),
-        "raw_label": raw_prediction.get(
-            "label"
-        ),
-        "raw_confidence": raw_confidence,
-        "raw_confidence_percent": round(
-            raw_confidence * 100.0,
-            2,
-        ),
-        "raw_margin": raw_margin,
-        "raw_margin_percent": round(
-            raw_margin * 100.0,
-            2,
-        ),
         "thresholds": {
-            "min_confidence": MIN_CONFIDENCE,
-            "min_confidence_percent": round(
-                MIN_CONFIDENCE * 100.0,
-                2,
+            "min_confidence": (
+                MIN_ACCEPT_CONFIDENCE
             ),
-            "min_margin": MIN_MARGIN,
-            "min_margin_percent": round(
-                MIN_MARGIN * 100.0,
-                2,
+            "min_margin": (
+                MIN_ACCEPT_MARGIN
             ),
-            "min_valid_ratio": MIN_VALID_RATIO,
-            "min_valid_ratio_percent": round(
-                MIN_VALID_RATIO * 100.0,
-                2,
+            "min_valid_ratio": (
+                MIN_VALID_HAND_RATIO
             ),
-            "min_votes": VOTE_HITS,
-            "vote_window": VOTE_WINDOW,
-            "infer_every": INFER_EVERY,
-            "neutral_reset_hits": NEUTRAL_RESET_HITS,
-            "change_cooldown_seconds": (
-                CHANGE_COOLDOWN_SECONDS
-            ),
+            "one_gesture_one_inference": True,
         },
     }
+
+
+
+def sanitize_segment_payload(
+    segment_snapshot,
+    accepted_event,
+    event_id,
+):
+    """
+    Frontend lama bisa mendengarkan segment.result_event.
+    Maka result_event di segment juga hanya True jika kata
+    BENAR-BENAR diterima ke transcript.
+    """
+
+    payload = (
+        dict(segment_snapshot)
+        if isinstance(
+            segment_snapshot,
+            dict,
+        )
+        else {}
+    )
+
+    payload[
+        "result_event"
+    ] = bool(
+        accepted_event
+    )
+
+    payload[
+        "accepted_event"
+    ] = bool(
+        accepted_event
+    )
+
+    payload[
+        "event_id"
+    ] = (
+        int(event_id)
+        if accepted_event
+        else None
+    )
+
+    return payload
 
 
 # ============================================================
 # WEBSOCKET REALTIME
 # ============================================================
+
 
 @router.websocket(
     "/ws/realtime"
@@ -493,92 +643,117 @@ async def realtime_websocket(
 
     frame_count = 0
     last_client_frame_id = None
-
-    runtime_generation = model_runtime.generation
-
-    def create_pipeline_components():
-        profile = model_runtime.get_preprocessing_profile()
-        builder = RealtimeSequenceBuilder(
-            sequence_length=SEQUENCE_LENGTH,
-            window_seconds=profile.get("window_seconds"),
-            max_interp_gap=profile.get("max_interp_gap", 6),
-            edge_fill=profile.get("edge_fill", 2),
-        )
-        vision = LandmarkExtractor(
-            profile=profile.get("vision_profile", "legacy_v1")
-        )
-        return builder, vision
-
-    sequence_builder, extractor = create_pipeline_components()
-
-    prediction_history = deque(
-        maxlen=VOTE_WINDOW,
+    runtime_generation = (
+        model_runtime.generation
     )
 
     raw_prediction = None
-    display_prediction = None
-
-    last_emit_label = None
-    last_emit_time = 0.0
-
-    same_label_rearmed = True
-    neutral_streak = 0
-
+    last_accepted_prediction = None
     accepted_event_counter = 0
 
-    stable_votes = 0
+    # ========================================================
+    # PIPELINE FACTORY
+    # ========================================================
+
+    def create_pipeline_components():
+        profile = (
+            model_runtime
+            .get_preprocessing_profile()
+        )
+
+        builder = RealtimeSequenceBuilder(
+            sequence_length=(
+                SEQUENCE_LENGTH
+            ),
+            window_seconds=profile.get(
+                "window_seconds"
+            ),
+            max_interp_gap=profile.get(
+                "max_interp_gap",
+                6,
+            ),
+            edge_fill=profile.get(
+                "edge_fill",
+                2,
+            ),
+        )
+
+        vision = LandmarkExtractor(
+            profile=profile.get(
+                "vision_profile",
+                "legacy_v1",
+            )
+        )
+
+        gesture = (
+            IsolatedGestureSegmenter()
+        )
+
+        return (
+            builder,
+            vision,
+            gesture,
+        )
+
+    (
+        sequence_builder,
+        extractor,
+        gesture_segmenter,
+    ) = create_pipeline_components()
 
     # ========================================================
-    # LOCAL RESET HELPER
+    # RESET
     # ========================================================
 
     def reset_runtime_state():
         nonlocal frame_count
         nonlocal last_client_frame_id
         nonlocal raw_prediction
-        nonlocal display_prediction
-        nonlocal last_emit_label
-        nonlocal last_emit_time
-        nonlocal same_label_rearmed
-        nonlocal neutral_streak
+        nonlocal last_accepted_prediction
         nonlocal accepted_event_counter
-        nonlocal stable_votes
 
         frame_count = 0
         last_client_frame_id = None
 
         sequence_builder.reset()
+        gesture_segmenter.reset()
+
         try:
             extractor.reset_temporal_state()
         except Exception:
             pass
 
-        prediction_history.clear()
-
         raw_prediction = None
-        display_prediction = None
-
-        last_emit_label = None
-        last_emit_time = 0.0
-
-        same_label_rearmed = True
-        neutral_streak = 0
-
+        last_accepted_prediction = None
         accepted_event_counter = 0
-        stable_votes = 0
+
+    # ========================================================
+    # MODEL HOT-SWITCH REBUILD
+    # ========================================================
 
     def rebuild_pipeline_for_active_model():
         nonlocal sequence_builder
         nonlocal extractor
+        nonlocal gesture_segmenter
         nonlocal runtime_generation
 
         old_extractor = extractor
-        sequence_builder, extractor = create_pipeline_components()
-        runtime_generation = model_runtime.generation
+
+        (
+            sequence_builder,
+            extractor,
+            gesture_segmenter,
+        ) = create_pipeline_components()
+
+        runtime_generation = (
+            model_runtime.generation
+        )
+
         try:
             old_extractor.close()
         except Exception:
             pass
+
         reset_runtime_state()
 
     # ========================================================
@@ -590,34 +765,33 @@ async def realtime_websocket(
             "type": "connection",
             "status": "connected",
             "message": (
-                "BISINDO continuous rolling "
+                "BISINDO isolated gesture "
                 "recognition ready."
             ),
             "vision": "ready",
             "recognition_mode": (
-                "continuous_rolling"
+                "isolated_gesture"
             ),
             "sequence_target": (
                 SEQUENCE_LENGTH
             ),
-            "infer_every": (
-                INFER_EVERY
-            ),
-            "vote_window": (
-                VOTE_WINDOW
-            ),
-            "vote_hits": (
-                VOTE_HITS
-            ),
+            "one_gesture_one_inference": True,
             "model_loaded": (
                 model_runtime.loaded
             ),
             "model_status": (
                 model_runtime.status
             ),
-            "model_version": model_runtime.active_version,
-            "runtime_schema": model_runtime.runtime_schema,
-            "window_duration_sec": model_runtime.get_window_seconds(),
+            "model_version": (
+                model_runtime.active_version
+            ),
+            "runtime_schema": (
+                model_runtime.runtime_schema
+            ),
+            "window_duration_sec": (
+                model_runtime
+                .get_window_seconds()
+            ),
             "server_time": utc_now(),
         }
     )
@@ -625,7 +799,8 @@ async def realtime_websocket(
     try:
         while True:
             message = (
-                await websocket.receive_json()
+                await websocket
+                .receive_json()
             )
 
             message_type = message.get(
@@ -644,6 +819,9 @@ async def realtime_websocket(
                         "status": "ok",
                         "model_loaded": (
                             model_runtime.loaded
+                        ),
+                        "model_version": (
+                            model_runtime.active_version
                         ),
                         "server_time": utc_now(),
                     }
@@ -664,25 +842,27 @@ async def realtime_websocket(
                         ),
                         "vision": "ready",
                         "recognition_mode": (
-                            "continuous_rolling"
+                            "isolated_gesture"
                         ),
                         "sequence_target": (
                             SEQUENCE_LENGTH
                         ),
-                        "infer_every": (
-                            INFER_EVERY
-                        ),
-                        "vote_window": (
-                            VOTE_WINDOW
-                        ),
-                        "vote_hits": (
-                            VOTE_HITS
-                        ),
+                        "one_gesture_one_inference": True,
                         "model_loaded": (
                             model_runtime.loaded
                         ),
                         "model_status": (
                             model_runtime.status
+                        ),
+                        "model_version": (
+                            model_runtime.active_version
+                        ),
+                        "runtime_schema": (
+                            model_runtime.runtime_schema
+                        ),
+                        "window_duration_sec": (
+                            model_runtime
+                            .get_window_seconds()
                         ),
                         "server_time": utc_now(),
                     }
@@ -690,22 +870,48 @@ async def realtime_websocket(
                 continue
 
             # =================================================
-            # HOT-SWITCH MODEL (optional WebSocket UI path)
+            # HOT-SWITCH MODEL
             # =================================================
 
-            if message_type in ("select_model", "switch_model"):
-                version = str(message.get("version", "")).strip()
-                success = model_runtime.switch(version)
+            if message_type in (
+                "select_model",
+                "switch_model",
+            ):
+                version = str(
+                    message.get(
+                        "version",
+                        "",
+                    )
+                ).strip()
+
+                success = (
+                    model_runtime
+                    .switch(
+                        version
+                    )
+                )
+
                 if success:
                     rebuild_pipeline_for_active_model()
-                await websocket.send_json({
-                    "type": "model_selected",
-                    "success": bool(success),
-                    "version": model_runtime.active_version,
-                    "model": model_runtime.get_status(),
-                    "error": model_runtime.error,
-                    "server_time": utc_now(),
-                })
+
+                await websocket.send_json(
+                    {
+                        "type": "model_selected",
+                        "success": bool(
+                            success
+                        ),
+                        "version": (
+                            model_runtime.active_version
+                        ),
+                        "model": (
+                            model_runtime.get_status()
+                        ),
+                        "error": (
+                            model_runtime.error
+                        ),
+                        "server_time": utc_now(),
+                    }
+                )
                 continue
 
             # =================================================
@@ -721,11 +927,11 @@ async def realtime_websocket(
                         "status": "ok",
                         "prediction": None,
                         "segment": (
-                            build_segment_compat(
-                                0,
+                            sanitize_segment_payload(
+                                gesture_segmenter
+                                .snapshot(),
                                 False,
                                 0,
-                                False,
                             )
                         ),
                         "server_time": utc_now(),
@@ -734,13 +940,17 @@ async def realtime_websocket(
                 continue
 
             # =================================================
-            # CAMERA FRAME
+            # CAMERA FRAME ONLY
             # =================================================
 
             if message_type != "frame":
                 continue
 
-            if model_runtime.generation != runtime_generation:
+            # REST switch can happen outside this websocket.
+            if (
+                model_runtime.generation
+                != runtime_generation
+            ):
                 rebuild_pipeline_for_active_model()
 
             frame_id = None
@@ -771,40 +981,54 @@ async def realtime_websocket(
                     )
                 )
 
-                frame_timestamp_sec = frame_timestamp_seconds(message)
+                frame_timestamp_sec = (
+                    frame_timestamp_seconds(
+                        message
+                    )
+                )
 
                 # =============================================
                 # NEW CAMERA SESSION
                 # =============================================
 
                 if (
-                    last_client_frame_id is not None
-                    and frame_id <= last_client_frame_id
+                    last_client_frame_id
+                    is not None
+                    and frame_id
+                    <= last_client_frame_id
                 ):
                     reset_runtime_state()
 
-                last_client_frame_id = frame_id
+                last_client_frame_id = (
+                    frame_id
+                )
 
                 # =============================================
                 # DECODE + VISION
                 # =============================================
 
-                frame_bytes = decode_frame_base64(
-                    message.get(
-                        "image_base64",
-                        "",
+                frame_bytes = (
+                    decode_frame_base64(
+                        message.get(
+                            "image_base64",
+                            "",
+                        )
                     )
                 )
 
-                vision_result = extractor.extract(
-                    frame_bytes
+                vision_result = (
+                    extractor.extract(
+                        frame_bytes
+                    )
                 )
 
                 frame_count += 1
 
-                counts = vision_result[
-                    "counts"
-                ]
+                counts = (
+                    vision_result[
+                        "counts"
+                    ]
+                )
 
                 current_hand_detected = (
                     counts[
@@ -815,17 +1039,30 @@ async def realtime_websocket(
                     ] > 0
                 )
 
+                landmarks = (
+                    vision_result[
+                        "landmarks"
+                    ]
+                )
+
                 # =============================================
-                # ROLLING 48 RAW LANDMARK WINDOW
+                # CONTINUOUS FEATURE BUFFER
+                #
+                # V2:
+                #   timestamp-aware fixed window (2.2 s)
+                #   -> 48 samples
+                #
+                # V1:
+                #   legacy rolling 48 frames
                 # =============================================
 
                 sequence_state = (
                     sequence_builder.add_frame(
                         frame_id,
-                        vision_result[
-                            "landmarks"
-                        ],
-                        timestamp_sec=frame_timestamp_sec,
+                        landmarks,
+                        timestamp_sec=(
+                            frame_timestamp_sec
+                        ),
                     )
                 )
 
@@ -843,27 +1080,39 @@ async def realtime_websocket(
                     )
                 )
 
-                preprocessing_ms = safe_float(
-                    sequence_state.get(
-                        "preprocessing_ms",
-                        0.0,
+                preprocessing_ms = (
+                    safe_float(
+                        sequence_state.get(
+                            "preprocessing_ms",
+                            0.0,
+                        )
                     )
                 )
 
-                sequence_build_ms = 0.0
-                inference_ms = 0.0
+                # =============================================
+                # GESTURE STATE MACHINE
+                # =============================================
+
+                (
+                    segment_snapshot,
+                    completed_segment,
+                ) = gesture_segmenter.observe(
+                    frame_id,
+                    landmarks,
+                    current_hand_detected,
+                )
 
                 inference_performed = False
                 accepted_event = False
+                sequence_build_ms = 0.0
+                inference_ms = 0.0
+                current_result = None
 
                 # =============================================
-                # INFERENCE EVERY 2 FRAMES
+                # ONE COMPLETED GESTURE -> ONE INFERENCE
                 # =============================================
 
-                if (
-                    ready
-                    and frame_count % INFER_EVERY == 0
-                ):
+                if completed_segment is not None:
                     inference_performed = True
 
                     sequences = (
@@ -876,23 +1125,73 @@ async def realtime_websocket(
                         .get_performance()
                     )
 
-                    sequence_build_ms = safe_float(
-                        perf.get(
-                            "build_ms",
-                            0.0,
+                    sequence_build_ms = (
+                        safe_float(
+                            perf.get(
+                                "build_ms",
+                                0.0,
+                            )
                         )
                     )
 
                     if sequences is None:
-                        raw_prediction = {
-                            "status": "idle",
-                            "label": None,
+                        raw_prediction = (
+                            empty_prediction(
+                                "warming_up"
+                            )
+                        )
+
+                        current_result = {
+                            "status": "warming_up",
+                            "raw_status": "warming_up",
+                            "accepted": False,
                             "class_id": None,
+                            "label": None,
                             "confidence": 0.0,
                             "confidence_percent": 0.0,
+                            "margin": 0.0,
+                            "margin_percent": 0.0,
                             "top3": [],
                             "hand_present_frames": 0,
                             "inference_ms": None,
+                            "segment_id": (
+                                completed_segment.get(
+                                    "segment_id"
+                                )
+                            ),
+                            "source_frames": (
+                                completed_segment.get(
+                                    "source_frames",
+                                    0,
+                                )
+                            ),
+                            "sampled_frames": (
+                                SEQUENCE_LENGTH
+                            ),
+                            "unique_sampled_frames": 0,
+                            "sequence_build_ms": (
+                                sequence_build_ms
+                            ),
+                            "end_reason": (
+                                completed_segment.get(
+                                    "end_reason"
+                                )
+                            ),
+                            "peak_motion": (
+                                completed_segment.get(
+                                    "peak_motion",
+                                    0.0,
+                                )
+                            ),
+                            "segment_quality_valid": (
+                                completed_segment.get(
+                                    "quality_valid",
+                                    False,
+                                )
+                            ),
+                            "valid_ratio": 0.0,
+                            "valid_ratio_percent": 0.0,
+                            "thresholds": {},
                         }
 
                     else:
@@ -903,286 +1202,151 @@ async def realtime_websocket(
                             )
                         )
 
-                    inference_ms = safe_float(
-                        raw_prediction.get(
-                            "inference_ms",
-                            0.0,
+                        inference_ms = (
+                            safe_float(
+                                raw_prediction.get(
+                                    "inference_ms",
+                                    0.0,
+                                )
+                            )
                         )
-                    )
 
-                    confidence = safe_float(
-                        raw_prediction.get(
-                            "confidence",
-                            0.0,
-                        )
-                    )
-
-                    margin = prediction_margin(
-                        raw_prediction
-                    )
-
-                    hand_present_frames = int(
-                        raw_prediction.get(
-                            "hand_present_frames",
-                            0,
-                        )
-                        or 0
-                    )
-
-                    valid_ratio = (
-                        hand_present_frames
-                        / SEQUENCE_LENGTH
-                    )
-
-                    passed = (
-                        current_hand_detected
-                        and raw_prediction.get(
-                            "status"
-                        ) == "ok"
-                        and confidence >= MIN_CONFIDENCE
-                        and margin >= MIN_MARGIN
-                        and valid_ratio >= MIN_VALID_RATIO
-                    )
-
-                    # =========================================
-                    # VALID CANDIDATE
-                    # =========================================
-
-                    if passed:
-                        neutral_streak = 0
-
-                        prediction_history.append(
-                            {
-                                "class_id": (
-                                    raw_prediction.get(
-                                        "class_id"
+                        sequence_info = {
+                            "source_frames": (
+                                completed_segment.get(
+                                    "source_frames",
+                                    0,
+                                )
+                            ),
+                            "sampled_frames": (
+                                SEQUENCE_LENGTH
+                            ),
+                            "unique_sampled_frames": min(
+                                int(
+                                    completed_segment.get(
+                                        "source_frames",
+                                        0,
                                     )
                                 ),
-                                "label": (
-                                    raw_prediction.get(
-                                        "label"
-                                    )
-                                ),
-                                "confidence": confidence,
-                                "margin": margin,
-                            }
-                        )
-
-                    # =========================================
-                    # NEUTRAL / UNCERTAIN TRANSITION
-                    # =========================================
-
-                    else:
-                        neutral_streak += 1
-
-                        prediction_history.append(
-                            None
-                        )
-
-                        if (
-                            neutral_streak
-                            >= NEUTRAL_RESET_HITS
-                        ):
-                            same_label_rearmed = True
-                            display_prediction = None
-
-                    # =========================================
-                    # TEMPORAL VOTING
-                    # =========================================
-
-                    valid_votes = [
-                        item
-                        for item in prediction_history
-                        if (
-                            isinstance(item, dict)
-                            and item.get("label")
-                        )
-                    ]
-
-                    stable_id = None
-                    stable_label = None
-                    stable_conf = 0.0
-                    stable_margin = 0.0
-                    stable_votes = 0
-
-                    if valid_votes:
-                        counts_by_id = Counter(
-                            int(item["class_id"])
-                            for item in valid_votes
-                            if item.get(
-                                "class_id"
-                            ) is not None
-                        )
-
-                        if counts_by_id:
-                            (
-                                stable_id,
-                                stable_votes,
-                            ) = counts_by_id.most_common(
-                                1
-                            )[0]
-
-                            matching = [
-                                item
-                                for item in valid_votes
-                                if int(
-                                    item["class_id"]
-                                ) == stable_id
-                            ]
-
-                            if matching:
-                                stable_label = matching[-1][
-                                    "label"
-                                ]
-
-                                stable_conf = sum(
-                                    safe_float(
-                                        item.get(
-                                            "confidence",
-                                            0.0,
-                                        )
-                                    )
-                                    for item in matching
-                                ) / len(matching)
-
-                                stable_margin = sum(
-                                    safe_float(
-                                        item.get(
-                                            "margin",
-                                            0.0,
-                                        )
-                                    )
-                                    for item in matching
-                                ) / len(matching)
-
-                    # =========================================
-                    # STABLE WORD
-                    # =========================================
-
-                    if (
-                        stable_id is not None
-                        and stable_votes >= VOTE_HITS
-                        and stable_conf >= MIN_CONFIDENCE
-                    ):
-                        stable_result = {
-                            "class_id": int(
-                                stable_id
+                                SEQUENCE_LENGTH,
                             ),
-                            "label": str(
-                                stable_label
-                            ),
-                            "confidence": float(
-                                stable_conf
-                            ),
-                            "margin": float(
-                                stable_margin
+                            "build_ms": (
+                                sequence_build_ms
                             ),
                         }
 
-                        display_prediction = (
-                            stable_result
-                        )
-
-                        now = time.monotonic()
-
-                        is_new_class = (
-                            last_emit_label is None
-                            or int(stable_id)
-                            != int(last_emit_label)
-                        )
-
-                        is_rearmed_same_class = (
-                            last_emit_label is not None
-                            and int(stable_id)
-                            == int(last_emit_label)
-                            and same_label_rearmed
-                        )
-
-                        debounce_ok = (
-                            now - last_emit_time
-                            >= CHANGE_COOLDOWN_SECONDS
-                        )
-
-                        allowed = (
-                            debounce_ok
-                            and (
-                                is_new_class
-                                or is_rearmed_same_class
+                        current_result = (
+                            build_segment_result(
+                                raw_prediction,
+                                completed_segment,
+                                sequence_info,
                             )
                         )
 
-                        if allowed:
-                            accepted_event = True
-                            accepted_event_counter += 1
-
-                            last_emit_label = int(
-                                stable_id
+                        current_result = (
+                            apply_final_acceptance_gate(
+                                current_result
                             )
+                        )
 
-                            last_emit_time = now
+                    accepted_event = bool(
+                        current_result.get(
+                            "accepted",
+                            False,
+                        )
+                    )
 
-                            same_label_rearmed = False
-                            neutral_streak = 0
+                    if accepted_event:
+                        accepted_event_counter += 1
 
-                            # Sama seperti native Python:
-                            # clear vote history,
-                            # JANGAN clear rolling raw window.
-                            prediction_history.clear()
-
-                            print(
-                                "[SIGN] "
-                                f"event={accepted_event_counter} "
-                                f"label={stable_label} "
-                                f"conf={stable_conf:.3f} "
-                                f"margin={stable_margin:.3f} "
-                                f"window={window_count}/{SEQUENCE_LENGTH}"
+                        last_accepted_prediction = (
+                            dict(
+                                current_result
                             )
+                        )
+
+                        print(
+                            "[SIGN] "
+                            f"event={accepted_event_counter} "
+                            f"segment={current_result.get('segment_id')} "
+                            f"label={current_result.get('label')} "
+                            f"conf={safe_float(current_result.get('confidence')):.3f} "
+                            f"margin={safe_float(current_result.get('margin')):.3f} "
+                            f"valid={safe_float(current_result.get('valid_ratio')):.3f} "
+                            f"reason={current_result.get('end_reason')}"
+                        )
+
+                    else:
+                        print(
+                            "[REJECT] "
+                            f"segment={current_result.get('segment_id')} "
+                            f"status={current_result.get('status')} "
+                            f"label={current_result.get('label')} "
+                            f"conf={safe_float(current_result.get('confidence')):.3f} "
+                            f"margin={safe_float(current_result.get('margin')):.3f} "
+                            f"valid={safe_float(current_result.get('valid_ratio')):.3f}"
+                        )
+
+                    # Masuk cooldown dan tunggu neutral/rearm.
+                    segment_snapshot = (
+                        gesture_segmenter
+                        .finish_analysis(
+                            current_result
+                        )
+                    )
 
                 # =============================================
                 # PREDICTION PAYLOAD
                 # =============================================
 
+                display_prediction = (
+                    current_result
+                    if accepted_event
+                    else last_accepted_prediction
+                )
+
                 prediction_payload = (
                     build_prediction_payload(
-                        display_prediction=(
-                            display_prediction
-                        ),
                         raw_prediction=(
                             raw_prediction
                         ),
-                        inference_performed=(
-                            inference_performed
+                        display_prediction=(
+                            display_prediction
                         ),
                         accepted_event=(
                             accepted_event
                         ),
+                        inference_performed=(
+                            inference_performed
+                        ),
                         event_id=(
                             accepted_event_counter
                         ),
-                        build_ms=(
+                        segment_id=(
+                            (
+                                current_result.get(
+                                    "segment_id"
+                                )
+                                if isinstance(
+                                    current_result,
+                                    dict,
+                                )
+                                else segment_snapshot.get(
+                                    "segment_id"
+                                )
+                            )
+                        ),
+                        sequence_build_ms=(
                             sequence_build_ms
-                        ),
-                        history_size=len(
-                            prediction_history
-                        ),
-                        stable_votes=(
-                            stable_votes
-                        ),
-                        neutral_streak=(
-                            neutral_streak
-                        ),
-                        same_label_rearmed=(
-                            same_label_rearmed
                         ),
                     )
                 )
 
                 segment_payload = (
-                    build_segment_compat(
-                        window_count,
+                    sanitize_segment_payload(
+                        segment_snapshot,
                         accepted_event,
                         accepted_event_counter,
-                        inference_performed,
                     )
                 )
 
@@ -1207,21 +1371,28 @@ async def realtime_websocket(
                         "type": "landmarks",
                         "status": "ok",
                         "frame_id": frame_id,
-                        "model_version": model_runtime.active_version,
-                        "runtime_schema": model_runtime.runtime_schema,
-                        "window_duration_sec": model_runtime.get_window_seconds(),
+                        "model_version": (
+                            model_runtime.active_version
+                        ),
+                        "runtime_schema": (
+                            model_runtime.runtime_schema
+                        ),
+                        "window_duration_sec": (
+                            model_runtime
+                            .get_window_seconds()
+                        ),
                         "width": width,
                         "height": height,
                         "frame_bytes": len(
                             frame_bytes
                         ),
-                        "landmarks": vision_result[
-                            "landmarks"
-                        ],
+                        "landmarks": landmarks,
                         "counts": counts,
-                        "processing_ms": vision_result[
-                            "processing_ms"
-                        ],
+                        "processing_ms": (
+                            vision_result[
+                                "processing_ms"
+                            ]
+                        ),
                         "pipeline_ms": round(
                             pipeline_ms,
                             2,
@@ -1238,13 +1409,17 @@ async def realtime_websocket(
                             inference_ms,
                             2,
                         ),
-                        "segment": segment_payload,
+                        "segment": (
+                            segment_payload
+                        ),
                         "prediction": (
                             prediction_payload
                         ),
                         "continuous": {
                             "mode": (
-                                ("rolling_2.2s_resampled_vote" if sequence_builder.time_aware else "rolling_48_temporal_vote")
+                                "isolated_segmented_2.2s"
+                                if sequence_builder.time_aware
+                                else "isolated_segmented_48frame"
                             ),
                             "window_count": (
                                 window_count
@@ -1253,33 +1428,35 @@ async def realtime_websocket(
                                 SEQUENCE_LENGTH
                             ),
                             "ready": ready,
-                            "infer_every": (
-                                INFER_EVERY
+                            "time_aware": bool(
+                                sequence_builder.time_aware
                             ),
-                            "vote_window": (
-                                VOTE_WINDOW
+                            "window_seconds": (
+                                sequence_builder.window_seconds
                             ),
-                            "vote_hits": (
-                                VOTE_HITS
+                            "one_gesture_one_inference": True,
+                            "inference_performed": bool(
+                                inference_performed
                             ),
-                            "history_size": len(
-                                prediction_history
+                            "accepted_event": bool(
+                                accepted_event
                             ),
-                            "stable_votes": (
-                                stable_votes
+                            "segment_state": (
+                                segment_payload.get(
+                                    "status"
+                                )
                             ),
-                            "neutral_streak": (
-                                neutral_streak
-                            ),
-                            "same_label_rearmed": (
-                                same_label_rearmed
+                            "segment_reason": (
+                                segment_payload.get(
+                                    "reason"
+                                )
                             ),
                         },
                         "model_loaded": (
                             model_runtime.loaded
                         ),
                         "recognition_mode": (
-                            "continuous_rolling"
+                            "isolated_gesture"
                         ),
                         "server_time": utc_now(),
                     }
@@ -1301,29 +1478,21 @@ async def realtime_websocket(
                         else None
                     )
 
-                    display_label = (
-                        display_prediction.get(
-                            "label"
-                        )
-                        if isinstance(
-                            display_prediction,
-                            dict,
-                        )
-                        else None
-                    )
-
                     print(
                         "[Realtime] "
                         f"frame={frame_count} "
-                        f"rolling={window_count}/{SEQUENCE_LENGTH} "
+                        f"buffer={window_count}/{SEQUENCE_LENGTH} "
+                        f"ready={ready} "
                         f"hands={counts['left_hand'] + counts['right_hand']} "
+                        f"segment={segment_payload.get('status')} "
+                        f"reason={segment_payload.get('reason')} "
+                        f"motion={safe_float(segment_payload.get('motion_ema')):.4f} "
                         f"raw={raw_label or '-'} "
-                        f"stable={display_label or '-'} "
-                        f"votes={stable_votes}/{VOTE_HITS} "
-                        f"neutral={neutral_streak} "
+                        f"infer={inference_performed} "
+                        f"accepted={accepted_event} "
                         f"vision={vision_result['processing_ms']}ms "
                         f"build={sequence_build_ms:.2f}ms "
-                        f"infer={inference_ms:.2f}ms"
+                        f"model={inference_ms:.2f}ms"
                     )
 
             except Exception as frame_error:

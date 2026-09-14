@@ -5,7 +5,14 @@ import {
   Sun,
   Wifi,
   WifiOff,
+  ChevronDown,
 } from "lucide-react";
+
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import useBackendHealth
   from "../../hooks/useBackendHealth";
@@ -18,7 +25,24 @@ import {
   useTheme,
 } from "../../contexts/ThemeContext";
 
+import {
+  useModel,
+} from "../../contexts/ModelContext";
+
 import "../../styles/header.css";
+
+
+function getModelLabel(version) {
+  if (version === "v1") {
+    return "V1 · Legacy";
+  }
+
+  if (version === "v2") {
+    return "V2 · Multimodal";
+  }
+
+  return version?.toUpperCase() || "Unknown";
+}
 
 
 function Header() {
@@ -46,6 +70,96 @@ function Header() {
     isConnected:
       isRealtimeConnected,
   } = useRealtime();
+
+
+  /* =========================
+     MODEL
+  ========================= */
+
+  const {
+    versions,
+    activeVersion,
+    changeModel,
+    switching,
+    loading:
+      isModelLoading,
+    error:
+      modelError,
+  } = useModel();
+
+
+  const [
+    isModelMenuOpen,
+    setIsModelMenuOpen,
+  ] = useState(false);
+
+
+  const modelMenuRef =
+    useRef(null);
+
+
+  useEffect(() => {
+    const handleOutsideClick =
+      (event) => {
+        if (
+          modelMenuRef.current &&
+          !modelMenuRef.current.contains(
+            event.target
+          )
+        ) {
+          setIsModelMenuOpen(
+            false
+          );
+        }
+      };
+
+
+    document.addEventListener(
+      "mousedown",
+      handleOutsideClick
+    );
+
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutsideClick
+      );
+    };
+  }, []);
+
+
+  const handleModelChange =
+    async (version) => {
+      if (
+        !version ||
+        version ===
+          activeVersion ||
+        switching
+      ) {
+        setIsModelMenuOpen(
+          false
+        );
+
+        return;
+      }
+
+
+      try {
+        await changeModel(
+          version
+        );
+
+        setIsModelMenuOpen(
+          false
+        );
+      } catch (error) {
+        console.error(
+          "[Header] model switch failed:",
+          error
+        );
+      }
+    };
 
 
   /* =========================
@@ -81,7 +195,7 @@ function Header() {
 
 
   /* =========================
-     UI STATE
+     CONNECTION
   ========================= */
 
   const getConnectionState =
@@ -192,28 +306,169 @@ function Header() {
       ========================== */}
 
       <div className="header-controls">
-        {/* MODEL */}
+        {/* MODEL SWITCHER */}
 
         <div
-          className="header-control-card"
-          title="Model pengenalan aktif"
+          ref={modelMenuRef}
+          className="header-model-switcher"
         >
-          <span className="header-control-icon">
-            <Cpu
-              size={16}
-              strokeWidth={1.8}
-            />
-          </span>
-
-          <div className="header-control-content">
-            <span className="header-control-label">
-              Active Model
+          <button
+            type="button"
+            className={
+              `header-control-card header-model-button ${
+                isModelMenuOpen
+                  ? "open"
+                  : ""
+              }`
+            }
+            title="Pilih model pengenalan"
+            aria-expanded={
+              isModelMenuOpen
+            }
+            disabled={
+              isModelLoading
+            }
+            onClick={() =>
+              setIsModelMenuOpen(
+                (current) =>
+                  !current
+              )
+            }
+          >
+            <span className="header-control-icon">
+              {switching ? (
+                <LoaderCircle
+                  size={16}
+                  strokeWidth={1.8}
+                  className="connection-loading"
+                />
+              ) : (
+                <Cpu
+                  size={16}
+                  strokeWidth={1.8}
+                />
+              )}
             </span>
 
-            <strong>
-              v1 · Words
-            </strong>
-          </div>
+            <div className="header-control-content">
+              <span className="header-control-label">
+                Active Model
+              </span>
+
+              <strong>
+                {switching
+                  ? "Switching..."
+                  : getModelLabel(
+                      activeVersion
+                    )}
+              </strong>
+            </div>
+
+            <ChevronDown
+              size={14}
+              strokeWidth={1.8}
+              className={
+                `header-model-chevron ${
+                  isModelMenuOpen
+                    ? "rotate"
+                    : ""
+                }`
+              }
+            />
+          </button>
+
+
+          {isModelMenuOpen && (
+            <div className="header-model-menu">
+              <div className="header-model-menu-heading">
+                Select Model
+              </div>
+
+              {versions.map(
+                (model) => {
+                  const version =
+                    model.version ||
+                    model.id;
+
+                  const isActive =
+                    version ===
+                    activeVersion;
+
+                  const isReady =
+                    model.ready !==
+                    false;
+
+
+                  return (
+                    <button
+                      type="button"
+                      key={
+                        version
+                      }
+                      className={
+                        `header-model-option ${
+                          isActive
+                            ? "active"
+                            : ""
+                        }`
+                      }
+                      disabled={
+                        !isReady ||
+                        switching
+                      }
+                      onClick={() =>
+                        handleModelChange(
+                          version
+                        )
+                      }
+                    >
+                      <span
+                        className={
+                          `header-model-status ${
+                            isReady
+                              ? "ready"
+                              : "offline"
+                          }`
+                        }
+                      />
+
+                      <div>
+                        <strong>
+                          {
+                            getModelLabel(
+                              version
+                            )
+                          }
+                        </strong>
+
+                        <span>
+                          {version ===
+                          "v2"
+                            ? "V3.2 · 7 Input"
+                            : "Legacy Pipeline"}
+                        </span>
+                      </div>
+
+                      {isActive && (
+                        <span className="header-model-active-text">
+                          Active
+                        </span>
+                      )}
+                    </button>
+                  );
+                }
+              )}
+
+
+              {modelError && (
+                <div className="header-model-error">
+                  {
+                    modelError
+                  }
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
 
